@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Hyperlink?>
+<?import javafx.scene.control.Menu?>
+<?import javafx.scene.control.MenuBar?>
+<?import javafx.scene.control.MenuItem?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.shape.Circle?>
+<?import javafx.scene.shape.Rectangle?>
+<?import javafx.scene.text.Text?>
+<?import javafx.scene.text.TextFlow?>
+
+<VBox prefHeight="350" prefWidth="500" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="Demo">
+	<children>
+		<MenuBar VBox.vgrow="NEVER">
+			<menus>
+				<Menu text="File">
+					<items>
+						<MenuItem onAction="#open" text="Open">
+							 <graphic>
+								<ImageView fitHeight="20" fitWidth="20" pickOnBounds="true" preserveRatio="true">
+									 <image>
+										<Image url="@open-iconic-master/png/folder-2x.png" />
+									</image>
+								</ImageView>
+							</graphic>
+						</MenuItem>
+						<MenuItem onAction="#save" text="Save">
+							<graphic>
+								<ImageView fitHeight="20" fitWidth="20" pickOnBounds="true" preserveRatio="true">
+									<image>
+										<Image url="@open-iconic-master/png/file-2x.png" />
+									</image>
+								</ImageView>
+							</graphic>
+						</MenuItem>
+						<MenuItem onAction="#exit" text="Quit">
+							<graphic>
+								<ImageView fitHeight="20" fitWidth="20" pickOnBounds="true" preserveRatio="true">
+									<image>
+										<Image url="@open-iconic-master/png/x-2x.png" />
+									</image>
+								</ImageView>
+							</graphic>
+						</MenuItem>
+					</items>
+				</Menu>
+				<Menu text="Help">
+					<items>
+						<MenuItem onAction="#browser" text="Help">
+							<graphic>
+								<ImageView fitHeight="20" fitWidth="20" pickOnBounds="true" preserveRatio="true">
+									<image>
+										<Image url="@open-iconic-master/png/question-mark-2x.png" />
+									</image>
+									</ImageView>
+							</graphic>
+						</MenuItem>
+						<MenuItem onAction="#info" text="About">
+							<graphic>
+								<ImageView fitHeight="20" fitWidth="20" pickOnBounds="true" preserveRatio="true">
+									<image>
+										<Image url="@open-iconic-master/png/info-2x.png" />
+										</image>
+									</ImageView>
+							</graphic>
+						</MenuItem>
+					</items>
+				</Menu>
+			</menus>
+		</MenuBar>
+		<AnchorPane maxHeight="-1" maxWidth="-1" prefHeight="-1" prefWidth="-1" VBox.vgrow="ALWAYS">
+			<children>
+				<ImageView fx:id="photo" X="50" Y="50" accessibleText="Placeholder for user selected photo." fitHeight="150" fitWidth="200" focusTraversable="true" pickOnBounds="true" preserveRatio="true">
+					<image>
+						<Image url="@open-iconic-master/png/camera-slr-8x.png" />
+					</image>
+				</ImageView>
+				<Text layoutX="25" layoutY="20" text="Select an image using File-&gt;Open" />
+				<Text accessibleText="Japanese Kanji for mouse or rat. Pronounced neh, zoo, mee." focusTraversable="true" layoutX="225" layoutY="75" style="-fx-font-size:45px" text="鼠" /> <!-- https://unicode-table.com/en/search/?q=mouse -->
+				<Text accessibleText="Unicode symbol for a warm beverage like coffee." focusTraversable="true" layoutX="230" layoutY="125" style="-fx-font-size:45px" text="☕" /> <!-- https://stackoverflow.com/questions/49016202/using-unicode-characters-with-javafx -->
+				<Text accessibleText="Unicode symbol for a white queen." focusTraversable="true" layoutX="225" layoutY="175" style="-fx-font-size:45px" text="♕" /> <!-- https://docs.oracle.com/javafx/2/api/javafx/scene/doc-files/cssref.html#:~:text=Inheritance%20%20%20%20Class%20%20%20,%20-fx-font%20%20%20Font.DEFAULT%20(12px%20system) -->
+				<Text accessibleText="Unicode symbol for the diamond suit, colored Brick Red." focusTraversable="true" layoutX="232" layoutY="225" style="-fx-font-size:45px;-fx-fill:FIREBRICK;" text="♦" /> <!-- Default RED is a little too bright -->
+				<Text layoutX="300" layoutY="20" text="Press ANY key:" />
+				<Text fx:id="keytext" layoutX="400" layoutY="20" text="" />
+				<TextField accessibleText="Enter text in this box and have the characters appear as they are typed." layoutX="300" layoutY="40" onKeyTyped="#keyTyped" />
+				<Rectangle fx:id="rect" accessibleRole="IMAGE_VIEW" accessibleText="Dodger blue colored rectangle that changes to Indigo and back again when clicked." arcHeight="5" arcWidth="5" fill="DODGERBLUE" focusTraversable="true" height="80" layoutX="375" layoutY="155" onMouseClicked="#flip" stroke="BLACK" strokeType="INSIDE" width="80" />
+				<Circle fx:id="circle" accessibleRole="IMAGE_VIEW" accessibleText="Orchid colored circle that can be dragged around the window using the mouse and will periodically return to its original position." fill="ORCHID" focusTraversable="true" layoutX="335" layoutY="115" onMouseDragged="#move" radius="40" stroke="BLACK" strokeType="INSIDE" />
+				<Button fx:id="play" layoutX="325" layoutY="250" mnemonicParsing="false" onAction="#play" text="Start" />
+				<Button fx:id="stop" disable="true" layoutX="375" layoutY="250" mnemonicParsing="false" onAction="#stop" text="Stop" />
+				<TextFlow focusTraversable="true" layoutX="25" layoutY="240">
+					<children>	<!-- https://stackoverflow.com/questions/15977295/control-for-displaying-multiline-text -->
+						<Text text="Water Music Suite in F major (Air)&#10;George Frideric Handel, CC BY-SA 3.0&#10;&lt;https://creativecommons.org/licenses/by-sa/3.0&gt;&#10;" wrappingWidth="300" />
+						<Hyperlink accessibleText="via Wikimedia Commons" onAction="#hyper" text="via Wikimedia Commons" />
+					</children>
+				</TextFlow>
+            <Button fx:id="gameOver" layoutX="324.0" layoutY="282.0" mnemonicParsing="false" onAction="#gameOver" text="  Game Over   " />
+			</children>
+		</AnchorPane>
+	</children>
+</VBox>

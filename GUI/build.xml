@@ -1,0 +1,79 @@
+<project name="Demo" xmlns:jacoco="antlib:org.jacoco.ant"  default="run">
+	<!--Change this value to your javafx lib directory-->
+	<property name="mod.path" value="C:/Program Files/Java/javafx-sdk-21/lib"/>
+	<!--<property name="mod.path" value="/home/aveliz/javafx-sdk-21/lib"/>-->
+	
+	<taskdef uri="antlib:org.jacoco.ant" resource="org/jacoco/ant/antlib.xml">
+		<classpath path="jacocoant.jar"/>
+	</taskdef>
+	<target name="build">
+		<javac srcdir="."  includeantruntime="false" modulepath="${mod.path}" debug="true" debuglevel="lines,vars,source">
+				<classpath>
+					<pathelement location="."/>
+				</classpath>
+				<exclude name="**/open-iconic-master/**"/>
+				<exclude name="**/report/**"/>
+				<exclude name="**.xml"/>
+				<exclude name="**.jar"/>
+				<exclude name="**.mp3"/>
+				<exclude name="**.fxml"/>
+				<exclude name="**.md"/>
+				<exclude name="**.exec"/>
+				<compilerarg line="--add-modules=&quot;javafx.controls,javafx.media,javafx.fxml&quot;"/>
+		</javac>
+	</target>
+	<target name="run" depends="build">	
+		<java classname="Demo" fork="true" modulepath="${mod.path}">
+			<jvmarg line="--add-modules=&quot;javafx.controls,javafx.media,javafx.fxml&quot;"/>
+			<classpath>
+				<pathelement location="."/>
+			</classpath>
+		</java>
+	</target>
+	<target name="report" depends="build">	
+		<jacoco:coverage>
+			<java classname="Demo" fork="true" modulepath="${mod.path}">
+				<jvmarg line="--add-modules=&quot;javafx.controls,javafx.media,javafx.fxml&quot;"/>
+				<classpath>
+					<pathelement location="."/>
+				</classpath>
+			</java>
+		</jacoco:coverage>
+		<jacoco:report>
+			<executiondata>
+				<file file="jacoco.exec"/>
+			</executiondata>
+			<structure name="Demo">
+				<classfiles>
+					<fileset dir="." includes="*.class">
+					</fileset>
+				</classfiles>
+				<sourcefiles encoding="UTF-8">
+				<fileset dir="." includes="*.class">
+					</fileset>
+				</sourcefiles>
+			</structure>
+			<html destdir="report"/>
+		</jacoco:report>
+	</target>
+	<target name="clean">
+        <delete>
+			<fileset dir="." includes="*.class"/>
+			<fileset dir="." includes="*.exec"/>
+        </delete>
+        <delete dir="report" />
+    </target>
+</project>
+<!-- All the links!!!
+https://search.maven.org/search?q=g:org.jacoco
+https://www.eclemma.org/jacoco/trunk/doc/ant.html
+https://ant.apache.org/manual/using.html
+https://ant.apache.org/manual/Tasks/java.html
+https://ant.apache.org/manual/Tasks/javac.html
+https://stackoverflow.com/questions/7388695/how-can-i-escape-double-quotes-in-ant
+https://stackoverflow.com/questions/51096472/jacoco-plugin-between-maven-and-ant
+https://stackoverflow.com/questions/39275646/ant-support-for-java-9-addmods-option
+https://stackoverflow.com/questions/19496964/can-i-declare-and-initialize-a-variable-in-an-ant-script
+https://coderanch.com/t/107475/build-tools/Ant-copy-dir-exclude-subdir
+https://www.logicbig.com/how-to/java-command/compile-with-debug-info.html
+-->

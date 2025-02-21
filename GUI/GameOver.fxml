@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.text.Text?>
+
+<AnchorPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="350.0" prefWidth="500.0" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1">
+   <children>
+      <Text id="title" focusTraversable="true" layoutX="183.0" layoutY="50.0" strokeType="OUTSIDE" strokeWidth="0.0" styleClass="lines" text="Game Over" />
+      <Text focusTraversable="true" layoutX="36.0" layoutY="94.0" strokeType="OUTSIDE" strokeWidth="0.0" styleClass="lines" text="Thank you Mario! &#10;But our princess is in another castle!" />
+      <Text focusTraversable="true" layoutX="37.0" layoutY="180.0" strokeType="OUTSIDE" strokeWidth="0.0" styleClass="lines" text="War... war never changes" />
+      <Text focusTraversable="true" layoutX="313.0" layoutY="180.0" strokeType="OUTSIDE" strokeWidth="0.0" styleClass="lines" text="YOU DIED" />
+      <Text focusTraversable="true" layoutX="87.0" layoutY="244.0" strokeType="OUTSIDE" strokeWidth="0.0" styleClass="lines" text="This was a triumph&#10;I'm making a note here; &quot;Huge success&quot;&#10;It's hard to overstate&#10;My satisfaction" textAlignment="CENTER" />
+   </children>
+</AnchorPane>
