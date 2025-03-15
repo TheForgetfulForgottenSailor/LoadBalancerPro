@@ -336,8 +336,21 @@ This method is the primary way to expand the system, enabling dynamic scaling. I
 <details>
 <summary><strong>🖼️ View Image</strong></summary>
  <br>
-![image](https://via.placeholder.com/800x400?text=LoadBalancerPro+UML) <!-- Replace with actual UML image URL -->
- ![image](https://via.placeholder.com/800x400?text=LoadBalancerPro+UML+2) <!-- Replace with additional UML image URL if needed -->
+![cloudmanager](https://github.com/user-attachments/assets/10171999-c98c-49a7-890d-e5fa81bfeef8)
+
+ ![loadbalancer](https://github.com/user-attachments/assets/5e921b3e-eaca-4eff-ba8b-e53efb93e3f7)
+ ![CLI](https://github.com/user-attachments/assets/79a2e4dc-c7df-4552-9e3d-72585c80771b)
+ ![GUI](https://github.com/user-attachments/assets/290d25f2-e29d-484d-a7de-21732d4891c8)
+ ![server](https://github.com/user-attachments/assets/74f33278-6111-4360-b902-a0011f342b5b)
+ ![servermonitor](https://github.com/user-attachments/assets/ae6eaf44-5a68-4e74-b1e9-58c09c531a15)
+ ![image](https://github.com/user-attachments/assets/dfdd709d-68a8-4c1b-86b4-c61136cab5f8)
+
+
+
+
+ 
+
+
 
  <br>
 </details>
