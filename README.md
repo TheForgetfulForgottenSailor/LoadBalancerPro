@@ -373,7 +373,7 @@ This method is the primary way to expand the system, enabling dynamic scaling. I
 
 ---
 
-
+<details>
 <summary><strong>📚 Works Cited: Load Balancing References</strong></summary>
 
 ### **📌 Core Programming References**
