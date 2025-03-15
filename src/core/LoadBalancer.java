@@ -404,9 +404,9 @@ public class LoadBalancer {
      * Stops the server monitor, terminates the executor service, shuts down cloud resources
      * if cloud integration is enabled, and logs the shutdown process.
      *
-     * @throws InterruptedException if the shutdown process is interrupted
+     * 
      */
-    public void shutdown() {
+    public void shutdown() throws InterruptedException {
         monitor.stop();
         try {
             monitorThread.join();

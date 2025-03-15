@@ -100,9 +100,9 @@ public class CloudManager {
      *
      * @param minServers the minimum number of servers to maintain
      * @param maxServers the maximum number of servers to scale to
-     * @throws InterruptedException if the sleep operation is interrupted
+     * 
      */
-    public void initializeCloudServers(int minServers, int maxServers) {
+    public void initializeCloudServers(int minServers, int maxServers)  throws InterruptedException {
         // Create or update Auto Scaling Group
         CreateAutoScalingGroupRequest asgRequest = new CreateAutoScalingGroupRequest()
                 .withAutoScalingGroupName(autoScalingGroupName)
