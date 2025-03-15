@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Main-Class: gui.LoadBalancerGUI
+Class-Path: lib/json-20230227.jar lib/junit-jupiter-api-5.9.1.jar lib/junit-jupiter-engine-5.9.1.jar lib/log4j-api-2.17.1.jar lib/log4j-core-2.17.1.jar
+
+
