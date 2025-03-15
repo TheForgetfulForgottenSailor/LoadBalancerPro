@@ -1,0 +1,43 @@
+@startuml Server
+
+skinparam backgroundColor #2B2B2B
+skinparam classBackgroundColor #333333
+skinparam classBorderColor #FFFFFF
+skinparam classFontColor #FFFFFF
+skinparam classFontSize 14
+skinparam arrowColor #FFFFFF
+skinparam roundcorner 15
+skinparam shadowing false
+
+class Server {
+    - String serverId
+    - double cpuUsage
+    - double memoryUsage
+    - double diskUsage
+    - double weight
+    - boolean isHealthy
+    - double capacity
+    - boolean cloudInstance
+    + Server(String serverId, double cpuUsage, double memoryUsage, double diskUsage) «constructor»
+    + double getLoadScore()
+    + JSONObject toJson()
+    + static Server fromJson(JSONObject json)
+    + String getServerId()
+    + double getCpuUsage()
+    + double getMemoryUsage()
+    + double getDiskUsage()
+    + double getWeight()
+    + boolean isHealthy()
+    + double getCapacity()
+    + void setWeight(double weight)
+    + void setHealthy(boolean healthy)
+    + void setCapacity(double capacity)
+    + void updateMetrics(double cpu, double mem, double disk)
+}
+
+note right of Server
+    "Represents a single server in the load balancer."
+    "Tracks CPU, memory, disk usage, and health status."
+end note
+
+@enduml

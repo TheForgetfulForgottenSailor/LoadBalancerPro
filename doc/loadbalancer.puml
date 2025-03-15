@@ -1,0 +1,70 @@
+@startuml
+
+' Class for LoadBalancer
+class LoadBalancer {
+    - List<Server> servers
+    - Map<String, Server> serverMap
+    - PriorityQueue<Server> loadQueue
+    - CloudManager cloudManager
+    - Map<String, Double> currentDistribution
+    - TreeMap<Long, Server> consistentHashRing
+    - ServerMonitor monitor
+    - Thread monitorThread
+    - List<String> alertLog
+    - ExecutorService executor
+    + LoadBalancer()
+    + void addServer(Server server)
+    + void checkServerHealth()
+    + Map<String, Double> roundRobin(double totalData)
+    + Map<String, Double> leastLoaded(double totalData)
+    + Map<String, Double> weightedDistribution(double totalData)
+    + Map<String, Double> consistentHashing(double totalData, int numKeys)
+    + Map<String, Double> capacityAware(double totalData)
+    + Map<String, Double> predictiveLoadBalancing(double totalData)
+    + void importServerLogs(String filename, String format)
+    + void exportReport(String filename, String format)
+    + void shutdown()
+    + void logAlert(String alertMsg)
+    + List<Server> getServers()
+    + Map<String, Server> getServerMap()
+    + void updateMetricsFromCloud()
+    + void scaleCloudServers(int desiredCapacity)
+}
+
+' Class for Server
+class Server {
+    - String serverId
+    - double cpuUsage
+    - double memoryUsage
+    - double diskUsage
+    - double capacity
+    - boolean cloudInstance
+    + double getLoadScore()
+    + boolean isHealthy()
+}
+
+' Class for CloudManager
+class CloudManager {
+    - AmazonEC2 ec2Client
+    - AmazonCloudWatch cloudWatchClient
+    - AmazonAutoScaling autoScalingClient
+    + void initializeCloudServers(int minServers, int maxServers)
+    + void scaleServers(int desiredCapacity)
+    + void updateServerMetricsFromCloud()
+    + void shutdown()
+}
+
+' Class for ServerMonitor
+class ServerMonitor {
+    - LoadBalancer balancer
+    - boolean running
+    + ServerMonitor(LoadBalancer balancer)
+    + void stop()
+}
+
+' Relationships
+LoadBalancer *-- "1..*" Server : manages
+LoadBalancer *-- "1" ServerMonitor : monitors
+LoadBalancer *-- "1" CloudManager : integrates with
+
+@enduml
