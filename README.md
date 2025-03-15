@@ -322,7 +322,8 @@ This method is the primary way to expand the system, enabling dynamic scaling. I
 <details>
 <summary><strong>🖼️ View Image</strong></summary>
  <br>
-![image](https://via.placeholder.com/800x400?text=LoadBalancerPro+Javadoc) <!-- Replace with actual Javadoc image URL -->
+![image](https://github.com/user-attachments/assets/ce8bc1e2-e8cb-4876-a03f-ef8da6f4dc84)
+
 
  <br>
 </details>
