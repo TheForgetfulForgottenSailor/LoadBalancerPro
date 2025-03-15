@@ -30,6 +30,8 @@ import org.apache.logging.log4j.Logger;
  *   <li>Provides structured logging for alerts and system state.</li>
  * </ul>
  *
+ * <p><b>UML Diagram:</b></p>
+ * <p><img src="loadbalancer.png" alt="LoadBalancer UML Diagram"></p>
  */
 public class LoadBalancer {
     /** Logger for tracking operations, alerts, and errors. */

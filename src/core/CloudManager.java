@@ -35,8 +35,11 @@ import java.util.Date;
  * <p><b>Notes:</b> The `launchTemplateId` and `VPCZoneIdentifier` are hardcoded placeholders
  * and should be replaced with actual AWS values for production use.</p>
  *
- * @author [Your Name]
- * @version 1.0
+ * <p><b>UML Diagram:</b></p>
+ * <p><img src="cloudmanager.png" alt="CloudManager UML Diagram"></p>
+ *
+ * @author Richmond Dhaenens
+ * @version 80.8
  */
 public class CloudManager {
     /** Amazon EC2 client for managing EC2 instances. */

@@ -38,8 +38,11 @@ import org.apache.logging.log4j.Logger;
  * - Uses {@code synchronized (balancer)} to ensure thread safety when modifying server states.
  * - Sleeps for 5 seconds between monitoring cycles.
  *
+ * <p><b>UML Diagram:</b></p>
+ * <p><img src="servermonitor.png" alt="ServerMonitor UML Diagram"></p>
+ *
  * @author Richmond Dhaenens
- * @version 17.0
+ * @version 18.0
  */
 public class ServerMonitor implements Runnable {
     /**

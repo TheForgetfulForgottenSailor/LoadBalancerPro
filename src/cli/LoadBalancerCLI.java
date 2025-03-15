@@ -40,6 +40,9 @@ import org.apache.logging.log4j.Logger;
  * - CLI logs all actions using Log4j.
  * - Errors are logged with detailed messages for debugging.
  *
+ * <p><b>UML Diagram:</b></p>
+ * <p><img src="loadbalancercli.png" alt="LoadBalancerCLI UML Diagram"></p>
+ *
  * @author Richmond Dhaenens
  * @version 100.0
  */

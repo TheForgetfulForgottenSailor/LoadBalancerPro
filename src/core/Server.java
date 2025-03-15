@@ -9,8 +9,11 @@ import org.json.JSONObject;
  * along with health status, weight, capacity, and cloud instance identification.
  * It supports JSON serialization/deserialization and metric updates.
  *
+ * <p><b>UML Diagram:</b></p>
+ * <p><img src="loadbalancer.png" alt="Server UML Diagram"></p>
+ *
  * @author Richmond Dhaenens
- * @version 111.1
+ * @version 112.1
  */
 public class Server {
     private String serverId;
