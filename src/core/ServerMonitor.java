@@ -39,7 +39,7 @@ import org.apache.logging.log4j.Logger;
  * - Sleeps for 5 seconds between monitoring cycles.
  *
  * <p><b>UML Diagram:</b></p>
- * <p><img src="servermonitor.png" alt="ServerMonitor UML Diagram"></p>
+ * <p><img src="doc/servermonitor.png" alt="ServerMonitor UML Diagram"></p>
  *
  * @author Richmond Dhaenens
  * @version 18.0

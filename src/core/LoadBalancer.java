@@ -31,7 +31,7 @@ import org.apache.logging.log4j.Logger;
  * </ul>
  *
  * <p><b>UML Diagram:</b></p>
- * <p><img src="loadbalancer.png" alt="LoadBalancer UML Diagram"></p>
+ * <p><img src="doc/loadbalancer.png" alt="LoadBalancer UML Diagram"></p>
  */
 public class LoadBalancer {
     /** Logger for tracking operations, alerts, and errors. */

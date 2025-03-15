@@ -10,7 +10,7 @@ import org.json.JSONObject;
  * It supports JSON serialization/deserialization and metric updates.
  *
  * <p><b>UML Diagram:</b></p>
- * <p><img src="loadbalancer.png" alt="Server UML Diagram"></p>
+ * <p><img src="doc/loadbalancer.png" alt="Server UML Diagram"></p>
  *
  * @author Richmond Dhaenens
  * @version 112.1

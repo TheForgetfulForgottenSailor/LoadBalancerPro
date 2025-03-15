@@ -36,7 +36,7 @@ import java.util.Date;
  * and should be replaced with actual AWS values for production use.</p>
  *
  * <p><b>UML Diagram:</b></p>
- * <p><img src="cloudmanager.png" alt="CloudManager UML Diagram"></p>
+ * <p><img src="doc/cloudmanager.png" alt="CloudManager UML Diagram"></p>
  *
  * @author Richmond Dhaenens
  * @version 80.8

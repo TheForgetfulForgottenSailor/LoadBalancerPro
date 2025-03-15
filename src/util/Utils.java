@@ -28,7 +28,7 @@ import org.apache.logging.log4j.Logger;
  * </ul>
  *
  * <p><b>UML Diagram:</b></p>
- * <p><img src="utils.png" alt="Utils UML Diagram"></p>
+ * <p><img src="doc/utils.png" alt="Utils UML Diagram"></p>
  *
  * @author Richmond Dhaenens
  * @version 17.0
