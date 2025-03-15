@@ -363,8 +363,8 @@ This method is the primary way to expand the system, enabling dynamic scaling. I
 <details>
 <summary><strong>🖼️ View Image</strong></summary>
  <br>
-![image](https://via.placeholder.com/800x400?text=LoadBalancerPro+JUnit+Results+1) <!-- Replace with actual JUnit image URL 1 -->
- ![image](https://via.placeholder.com/800x400?text=LoadBalancerPro+JUnit+Results+2) <!-- Replace with actual JUnit image URL 2 -->
+![JUnit](https://github.com/user-attachments/assets/e42de9b6-58f7-41da-95c1-2d243f57823c)
+
 
  <br>
 </details>
