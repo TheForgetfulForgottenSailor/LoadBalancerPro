@@ -373,20 +373,7 @@ This method is the primary way to expand the system, enabling dynamic scaling. I
 
 ---
 
-<details>
-<summary><strong>🔗 Clone Repository</strong></summary>
-<details>
-<summary><strong>🖼️ View Image</strong></summary>
- <br>
-![image](https://via.placeholder.com/800x400?text=LoadBalancerPro+Clone+Instructions) <!-- Replace with actual clone image URL -->
 
- <br>
-</details>
-</details>
-
----
-
-<details>
 <summary><strong>📚 Works Cited: Load Balancing References</strong></summary>
 
 ### **📌 Core Programming References**
