@@ -1,0 +1,50 @@
+@startuml loadbalancergui
+
+' Styling for better readability
+skinparam backgroundColor #2B2B2B
+skinparam classBackgroundColor #333333
+skinparam classBorderColor #FFFFFF
+skinparam classFontColor #FFFFFF
+skinparam classFontSize 14
+skinparam arrowColor #FFFFFF
+skinparam roundcorner 15
+skinparam shadowing false
+
+' LoadBalancerGUI JavaFX-based GUI
+class LoadBalancerGUI {
+    - static Logger logger
+    - LoadBalancer balancer
+    - TextArea statusArea
+
+    + void start(Stage stage)
+    + void addServerDialog()
+    + void importLogs()
+    + void balanceLoadDialog()
+    + void generateReport()
+    + void displayStatus()
+    + void failServerDialog()
+    + void log(String msg)
+    + void alert(String title, String msg)
+    + static void main(String[] args)
+}
+
+' LoadBalancerGUI depends on LoadBalancer for server management
+LoadBalancerGUI --> "1" LoadBalancer : manages
+
+' JavaFX components used in GUI
+LoadBalancerGUI --> "1" Stage : main window
+LoadBalancerGUI --> "1" TextArea : log output
+LoadBalancerGUI --> "7" Button : interactive controls
+
+' Logger integration
+LoadBalancerGUI --> "1" Logger : logs events
+
+' Explanation Note
+note right of LoadBalancerGUI
+    "Provides a JavaFX-based UI for LoadBalancerPro. 
+    Includes logging, status updates, and interactive load balancing controls."
+end note
+
+title LoadBalancerGUI - JavaFX UI for Load Balancing
+
+@enduml

@@ -1,0 +1,37 @@
+@startuml
+
+package core {
+    class ServerMonitor {
+        - static Logger logger
+        - LoadBalancer balancer
+        - volatile boolean running
+        - Random random
+        - double alertThreshold
+        --
+        + ServerMonitor(LoadBalancer balancer)
+        + stop(): void
+        + run(): void
+    }
+
+    class LoadBalancer {
+        + getServers(): List<Server>
+        + updateMetricsFromCloud(): void
+        + checkServerHealth(): void
+        + logAlert(String message): void
+    }
+
+    class Server {
+        + getServerId(): String
+        + getCpuUsage(): double
+        + getMemoryUsage(): double
+        + getDiskUsage(): double
+        + updateMetrics(double cpu, double mem, double disk): void
+        + isHealthy(): boolean
+    }
+}
+
+ServerMonitor ..|> Runnable
+ServerMonitor --> LoadBalancer
+LoadBalancer --> Server
+
+@enduml

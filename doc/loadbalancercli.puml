@@ -1,0 +1,54 @@
+@startuml
+
+package cli {
+    class LoadBalancerCLI {
+        - static Logger logger
+        - static String GREEN
+        - static String RED
+        - static String RESET
+        - static int MAX_SERVER_ID_LENGTH
+        - static LoadBalancer balancer
+        --
+        + main(String[] args)
+        - getChoiceInput(Scanner scanner): int
+        - getNonEmptyStringInput(Scanner scanner, String prompt): String
+        - getServerIdInput(Scanner scanner): String
+        - getValidatedInt(Scanner scanner, String prompt, int min, int max, String fieldName): int
+        - getValidatedDouble(Scanner scanner, String prompt, double min, double max, String fieldName): double
+        - showHelp(): void
+    }
+}
+
+package core {
+    class LoadBalancer {
+        + addServer(Server server)
+        + importServerLogs(String logFile, String format)
+        + roundRobin(double data): Map<String, Double>
+        + leastLoaded(double data): Map<String, Double>
+        + weightedDistribution(double data): Map<String, Double>
+        + consistentHashing(double data, int keys): Map<String, Double>
+        + capacityAware(double data): Map<String, Double>
+        + predictiveLoadBalancing(double data): Map<String, Double>
+        + exportReport(String reportFile, String format)
+        + checkServerHealth()
+        + shutdown()
+    }
+
+    class Server {
+        + Server(String id, double cpu, double mem, double disk)
+        + setCapacity(double capacity)
+        + getServerId(): String
+        + getCpuUsage(): double
+        + getMemoryUsage(): double
+        + getDiskUsage(): double
+        + getCapacity(): double
+        + getLoadScore(): double
+        + isHealthy(): boolean
+        + setHealthy(boolean state)
+    }
+}
+
+LoadBalancerCLI --> LoadBalancer
+LoadBalancer --> Server
+
+@enduml

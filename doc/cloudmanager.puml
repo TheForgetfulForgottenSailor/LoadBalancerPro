@@ -1,0 +1,45 @@
+@startuml cloudmanager
+
+skinparam backgroundColor #ADD8E6  
+skinparam classBackgroundColor #FFFFFF  
+skinparam classBorderColor #000080  
+skinparam classFontColor #000000  
+skinparam classFontSize 14  
+skinparam arrowColor #FFFFFF  
+skinparam roundcorner 15  
+skinparam shadowing false  
+
+' CloudManager class representing AWS integration
+class CloudManager {
+    - AmazonEC2 ec2Client
+    - AmazonCloudWatch cloudWatchClient
+    - AmazonAutoScaling autoScalingClient
+    - LoadBalancer balancer
+    - String launchTemplateId
+    - String autoScalingGroupName
+
+    + CloudManager(LoadBalancer balancer, String accessKey, String secretKey, String region) «constructor»
+    + void initializeCloudServers(int minServers, int maxServers)
+    + void scaleServers(int desiredCapacity)
+    + void updateServerMetricsFromCloud()
+    + int getMinServers()
+    + double getCloudMetric(String instanceId, String metricName)
+    + void shutdown()
+}
+
+' External AWS services linked to CloudManager
+CloudManager --> "1" AmazonEC2 : manages instances
+CloudManager --> "1" AmazonCloudWatch : monitors metrics
+CloudManager --> "1" AmazonAutoScaling : scales instances
+
+' Relationship with LoadBalancer
+LoadBalancer "1" -- "1" CloudManager : integrates with
+
+' Explanation Note
+note right of CloudManager
+    "Handles cloud instance management via AWS EC2, monitors performance with CloudWatch, and scales instances dynamically."
+end note
+
+title CloudManager - AWS Integration & Scaling
+
+@enduml
