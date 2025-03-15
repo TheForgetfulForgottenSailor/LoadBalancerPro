@@ -11,22 +11,57 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.Comparator;
 
+/**
+ * Test class for the Utils class, verifying its utility methods for server log import/export
+ * and hashing functionality, including cloud-specific scenarios.
+ *
+ * This class uses JUnit 5 to test the Utils class's ability to import server logs from CSV,
+ * export reports in JSON, and ensure hash consistency for both regular and cloud servers.
+ * It creates a temporary test directory (`test_data`) for file operations.
+ *
+ */
 class UtilsTest {
+    /** Logger for tracking test execution and results. */
     private static final Logger logger = LogManager.getLogger(UtilsTest.class);
+
+    /** Directory path for temporary test files (e.g., CSVs and JSON reports). */
     private static final Path TEST_DIR = Paths.get("test_data");
+
+    /** LoadBalancer instance used for testing server log import/export. */
     private LoadBalancer balancer;
 
+    /**
+     * Sets up the test environment before all test methods.
+     *
+     * Creates the test directory (`test_data`) for storing temporary files and logs the start
+     * of the test suite.
+     *
+     * @throws IOException if an I/O error occurs while creating the test directory
+     */
     @BeforeAll
     static void setup() throws IOException {
         logger.info("=== UTILS TEST KICKOFF ===");
         Files.createDirectories(TEST_DIR);
     }
 
+    /**
+     * Resets the LoadBalancer instance before each test method.
+     *
+     * Creates a new LoadBalancer instance to ensure a clean state for each test.
+     */
     @BeforeEach
     void reset() {
         balancer = new LoadBalancer();
     }
 
+    /**
+     * Tests importing server logs from a CSV file.
+     *
+     * Creates a CSV file with two servers, imports the logs into the LoadBalancer,
+     * and verifies the correct number of servers and their attributes.
+     *
+     * @throws IOException if an I/O error occurs while writing or reading the CSV file
+     */
     @Test
     void testImportServerLogs_CSV() throws IOException {
         logger.info("=== CSV IMPORT TEST ===");
@@ -37,6 +72,14 @@ class UtilsTest {
         assertEquals(200.0, balancer.serverMap.get("S1").getCapacity(), "S1 capacity off!");
     }
 
+    /**
+     * Tests exporting a report in JSON format.
+     *
+     * Adds a server and an alert to the LoadBalancer, exports them to a JSON file,
+     * and verifies the file exists and contains the expected data.
+     *
+     * @throws IOException if an I/O error occurs while writing or reading the JSON file
+     */
     @Test
     void testExportReport_JSON() throws IOException {
         logger.info("=== JSON EXPORT TEST ===");
@@ -50,6 +93,12 @@ class UtilsTest {
         assertTrue(content.contains("Test Alert"), "Alert missing in report!");
     }
 
+    /**
+     * Tests the consistency of the hash method in Utils.
+     *
+     * Computes the hash of a string twice and verifies that the results are identical,
+     * ensuring deterministic hashing.
+     */
     @Test
     void testHash_Consistency() {
         logger.info("=== HASH CONSISTENCY TEST ===");
@@ -58,47 +107,78 @@ class UtilsTest {
         assertEquals(hash1, hash2, "Hash ain’t consistent!");
     }
 
+    /**
+     * Cleans up the test environment after all test methods.
+     *
+     * Deletes the temporary test directory and its contents, ensuring a clean state.
+     *
+     * @throws IOException if an I/O error occurs while deleting the test directory
+     */
     @AfterAll
     static void cleanup() throws IOException {
         logger.info("=== CLEANING UP TEST DATA ===");
         Files.walk(TEST_DIR).sorted(Comparator.reverseOrder())
              .forEach(path -> path.toFile().delete());
     }
+
+    /**
+     * Tests importing cloud server logs from a CSV file.
+     *
+     * Creates a CSV file with two cloud servers, imports the logs into the LoadBalancer,
+     * and verifies the correct number of servers, their cloud status, and attributes.
+     *
+     * @throws IOException if an I/O error occurs while writing or reading the CSV file
+     */
     @Test
-	void testImportCloudServerLogs_CSV() throws IOException {
-		logger.info("=== CLOUD CSV IMPORT TEST ===");
-		Path csvFile = TEST_DIR.resolve("cloud_servers.csv");
-		Files.writeString(csvFile, "AWS-1,10.0,20.0,30.0,300.0,true\nAWS-2,15.0,25.0,35.0,250.0,true");
+    void testImportCloudServerLogs_CSV() throws IOException {
+        logger.info("=== CLOUD CSV IMPORT TEST ===");
+        Path csvFile = TEST_DIR.resolve("cloud_servers.csv");
+        Files.writeString(csvFile, "AWS-1,10.0,20.0,30.0,300.0,true\nAWS-2,15.0,25.0,35.0,250.0,true");
 
-		Utils.importServerLogs(csvFile.toString(), "csv", balancer);
+        Utils.importServerLogs(csvFile.toString(), "csv", balancer);
 
-		assertEquals(2, balancer.getServers().size(), "Didn’t load 2 cloud servers!");
-		assertTrue(balancer.serverMap.get("AWS-1").isCloudInstance(), "AWS-1 should be a cloud instance!");
-		assertEquals(300.0, balancer.serverMap.get("AWS-1").getCapacity(), "AWS-1 capacity mismatch!");
-	}
-	@Test
-	void testExportCloudReport_JSON() throws IOException {
-		logger.info("=== CLOUD JSON EXPORT TEST ===");
-		Server cloudServer = new Server("AWS-3", 20.0, 30.0, 40.0);
-		cloudServer.setCloudInstance(true);
-		balancer.addServer(cloudServer);
-		balancer.logAlert("AWS-3 High CPU Warning");
+        assertEquals(2, balancer.getServers().size(), "Didn’t load 2 cloud servers!");
+        assertTrue(balancer.serverMap.get("AWS-1").isCloudInstance(), "AWS-1 should be a cloud instance!");
+        assertEquals(300.0, balancer.serverMap.get("AWS-1").getCapacity(), "AWS-1 capacity mismatch!");
+    }
 
-		Path jsonFile = TEST_DIR.resolve("cloud_report.json");
-		Utils.exportReport(jsonFile.toString(), "json", balancer.getServers(), balancer.getAlertLog());
+    /**
+     * Tests exporting a cloud server report in JSON format.
+     *
+     * Adds a cloud server and an alert to the LoadBalancer, exports them to a JSON file,
+     * and verifies the file exists and contains the expected cloud server data and alert.
+     *
+     * @throws IOException if an I/O error occurs while writing or reading the JSON file
+     */
+    @Test
+    void testExportCloudReport_JSON() throws IOException {
+        logger.info("=== CLOUD JSON EXPORT TEST ===");
+        Server cloudServer = new Server("AWS-3", 20.0, 30.0, 40.0);
+        cloudServer.setCloudInstance(true);
+        balancer.addServer(cloudServer);
+        balancer.logAlert("AWS-3 High CPU Warning");
 
-		assertTrue(Files.exists(jsonFile), "Cloud JSON report didn’t generate!");
-		String content = Files.readString(jsonFile);
-		assertTrue(content.contains("AWS-3"), "Cloud server AWS-3 missing in report!");
-		assertTrue(content.contains("High CPU Warning"), "Cloud alert missing in report!");
-	}
-	@Test
-	void testCloudHash_Consistency() {
-		logger.info("=== CLOUD HASH CONSISTENCY TEST ===");
-		long cloudHash1 = Utils.hash("AWS-Server-10");
-		long cloudHash2 = Utils.hash("AWS-Server-10");
+        Path jsonFile = TEST_DIR.resolve("cloud_report.json");
+        Utils.exportReport(jsonFile.toString(), "json", balancer.getServers(), balancer.getAlertLog());
 
-		assertEquals(cloudHash1, cloudHash2, "Cloud hash should be consistent!");
-	}
-	
+        assertTrue(Files.exists(jsonFile), "Cloud JSON report didn’t generate!");
+        String content = Files.readString(jsonFile);
+        assertTrue(content.contains("AWS-3"), "Cloud server AWS-3 missing in report!");
+        assertTrue(content.contains("High CPU Warning"), "Cloud alert missing in report!");
+    }
+
+    /**
+     * Tests the consistency of the hash method for cloud servers.
+     *
+     * Computes the hash of a cloud server ID twice and verifies that the results are identical,
+     * ensuring deterministic hashing for cloud server scenarios.
+     */
+    @Test
+    void testCloudHash_Consistency() {
+        logger.info("=== CLOUD HASH CONSISTENCY TEST ===");
+        long cloudHash1 = Utils.hash("AWS-Server-10");
+        long cloudHash2 = Utils.hash("AWS-Server-10");
+
+        assertEquals(cloudHash1, cloudHash2, "Cloud hash should be consistent!");
+    }
 }

@@ -1,7 +1,7 @@
 package gui;
 
 import java.io.File;
-import java.util.concurrent.atomic.AtomicReference; // New import for AtomicReference
+import java.util.concurrent.atomic.AtomicReference;
 import core.LoadBalancer;
 import core.Server;
 import javafx.application.Application;
@@ -29,7 +29,7 @@ import java.util.Map;
  * The GUI leverages JavaFX for rendering and Log4j for structured logging.
  * 
  * <p><b>UML Diagram:</b></p>
- * <p><img src="LoadBalancerGUI.png" alt="UML Diagram for LoadBalancerGUI"></p>
+ * <p><img src="../loadbalancergui.png" alt="UML Diagram for LoadBalancerGUI"></p>
  */
 
 public class LoadBalancerGUI extends Application {

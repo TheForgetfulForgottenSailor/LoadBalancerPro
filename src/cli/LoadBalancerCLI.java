@@ -7,6 +7,45 @@ import java.util.Scanner;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+/**
+ * Command-line interface (CLI) for LoadBalancerPro.
+ *
+ * This class provides a terminal-based interface to interact with the {@code LoadBalancer}.
+ * Users can add servers, import logs, balance loads, generate reports, and simulate server failures.
+ * It provides real-time feedback and structured logging for operational tracking.
+ *
+ * <p><b>Features:</b></p>
+ * - Interactive menu-based CLI for managing load balancing operations.
+ * - Supports importing and exporting server data in CSV and JSON formats.
+ * - Provides multiple load balancing strategies, including Consistent Hashing and Predictive Balancing.
+ * - Logs important events and errors using Log4j.
+ *
+ * <p><b>Usage:</b></p>
+ * Run the CLI with:
+ * <pre>{@code
+ * java -cp "bin/classes;lib/*" cli.LoadBalancerCLI
+ * }</pre>
+ * 
+ * <p><b>Example Commands:</b></p>
+ * - Add Server: `add`
+ * - Import Logs: `import`
+ * - Balance Load: `balance`
+ * - Generate Report: `report`
+ * - Display Status: `status`
+ * - Check Health: `health`
+ * - Simulate Failure: `fail`
+ * - Exit: `exit`
+ *
+ * <p><b>Logging:</b></p>
+ * - CLI logs all actions using Log4j.
+ * - Errors are logged with detailed messages for debugging.
+ *
+ * <p><b>UML Diagram:</b></p>
+ * <p><img src="../loadbalancercli.png" alt="LoadBalancerCLI UML Diagram"></p>
+ *
+ * @author Richmond Dhaenens
+ * @version 100.0
+ */
 public class LoadBalancerCLI {
     private static final Logger logger = LogManager.getLogger(LoadBalancerCLI.class);
     private static final String GREEN = "\u001B[32m";
@@ -15,6 +54,24 @@ public class LoadBalancerCLI {
     private static final int MAX_SERVER_ID_LENGTH = 50; 
     private static LoadBalancer balancer = new LoadBalancer();
 
+
+	/**
+	* Entry point for the LoadBalancer CLI.
+	*
+	* This method initializes the interactive menu loop, allowing users to execute load balancing commands.
+	* It handles user input, processes commands, and interacts with the {@link LoadBalancer} instance.
+	* 
+	* <p><b>Behavior:</b></p>
+	* - Displays an interactive menu with numbered options.
+	* - Validates user input and ensures proper data handling.
+	* - Uses structured logging for tracking operations and errors.
+	* 
+	* <p><b>Logging:</b></p>
+	* - Logs major events like server addition, load balancing execution, and error handling.
+	* - Critical failures are logged before shutting down.
+	*
+	* @param args Command-line arguments (unused by default).
+	*/
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
 
@@ -252,7 +309,21 @@ public class LoadBalancerCLI {
             scanner.close();
         }
     }
-
+    
+   /**
+	* Prompts the user for a menu choice and validates the input.
+	*
+	* <p><b>Behavior:</b></p>
+	* - Ensures the user inputs a number within the valid menu range.
+	* - Provides feedback if the input is invalid or out of bounds.
+	* 
+	* <p><b>Error Handling:</b></p>
+	* - If non-numeric input is provided, an error message is displayed.
+	* - If input is out of range, the user is prompted again.
+	*
+	* @param scanner Scanner object for reading user input.
+	* @return A valid menu choice (1-8), or -1 if invalid.
+	*/
     private static int getChoiceInput(Scanner scanner) {
         while (true) {
             System.out.print("Enter choice: ");
@@ -276,7 +347,21 @@ public class LoadBalancerCLI {
             }
         }
     }
-
+    
+   /**
+	* Prompts the user for a non-empty string input.
+	*
+	* <p><b>Behavior:</b></p>
+	* - Ensures the input is not empty before returning it.
+	* - Logs a warning if the user submits an empty response.
+	*
+	* <p><b>Error Handling:</b></p>
+	* - If the user submits an empty string, they are prompted again.
+	*
+	* @param scanner Scanner object for reading user input.
+	* @param prompt The message to display before taking input.
+	* @return A non-empty string provided by the user.
+	*/
     private static String getNonEmptyStringInput(Scanner scanner, String prompt) {
         while (true) {
             System.out.print(prompt);
@@ -289,7 +374,23 @@ public class LoadBalancerCLI {
             return input;
         }
     }
-
+    
+   /**
+	* Prompts the user to enter a server ID and validates its format.
+	*
+	* <p><b>Validation:</b></p>
+	* - Ensures the ID is not empty.
+	* - Ensures the ID does not exceed {@value #MAX_SERVER_ID_LENGTH} characters.
+	* - Ensures the ID contains only alphanumeric characters and hyphens.
+	* - Checks if the ID is already in use.
+	*
+	* <p><b>Logging:</b></p>
+	* - Logs a warning if the ID is too long or contains invalid characters.
+	* - Logs an error if the server ID already exists.
+	*
+	* @param scanner Scanner object for reading user input.
+	* @return A valid server ID, or {@code null} if input is invalid.
+	*/
     private static String getServerIdInput(Scanner scanner) {
         while (true) {
             System.out.print("Enter Server ID: ");
@@ -317,7 +418,26 @@ public class LoadBalancerCLI {
             return id;
         }
     }
-
+	
+   /**
+	* Prompts the user for an integer input within a specified range.
+	*
+	* <p><b>Behavior:</b></p>
+	* - Ensures the input is a valid integer.
+	* - Ensures the integer falls within the defined range.
+	* - Re-prompts the user if input is invalid.
+	*
+	* <p><b>Error Handling:</b></p>
+	* - If non-numeric input is given, an error message is displayed.
+	* - If input is out of bounds, the user is prompted again.
+	*
+	* @param scanner Scanner object for reading user input.
+	* @param prompt The message to display before taking input.
+	* @param min The minimum acceptable value.
+	* @param max The maximum acceptable value.
+	* @param fieldName The field being validated (for logging purposes).
+	* @return A valid integer input from the user.
+	*/
     private static int getValidatedInt(Scanner scanner, String prompt, int min, int max, String fieldName) {
         while (true) {
             System.out.print(prompt.isEmpty() ? "Enter " + fieldName + ": " : prompt);
@@ -341,7 +461,26 @@ public class LoadBalancerCLI {
             }
         }
     }
-
+	
+   /**
+	* Prompts the user for a double input within a specified range.
+	*
+	* <p><b>Behavior:</b></p>
+	* - Ensures the input is a valid floating-point number.
+	* - Ensures the value falls within the defined range.
+	* - Re-prompts the user if input is invalid.
+	*
+	* <p><b>Error Handling:</b></p>
+	* - If non-numeric input is given, an error message is displayed.
+	* - If input is out of bounds, the user is prompted again.
+	*
+	* @param scanner Scanner object for reading user input.
+	* @param prompt The message to display before taking input.
+	* @param min The minimum acceptable value.
+	* @param max The maximum acceptable value.
+	* @param fieldName The field being validated (for logging purposes).
+	* @return A valid double input from the user.
+	*/
     private static double getValidatedDouble(Scanner scanner, String prompt, double min, double max, String fieldName) {
         while (true) {
             System.out.print(prompt.isEmpty() ? "Enter " + fieldName + ": " : prompt);
@@ -368,7 +507,21 @@ public class LoadBalancerCLI {
             }
         }
     }
-
+	/**
+	* Displays the help menu for LoadBalancerCLI.
+	*
+	* This method prints a list of available commands and their descriptions.
+	* It is triggered when the user runs the CLI with the "help" argument.
+	*
+	* <p><b>Example Usage:</b></p>
+	* <pre>{@code
+	* java -cp "bin/classes;lib/*" cli.LoadBalancerCLI help
+	* }</pre>
+	*
+	* <p><b>Logging:</b></p>
+	* - Logs when the help menu is requested.
+	* - Outputs the help message in green for readability.
+	*/
     private static void showHelp() {
         String help = """
             === LoadBalancerPro CLI Help ===
