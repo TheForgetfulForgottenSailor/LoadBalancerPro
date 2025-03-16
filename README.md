@@ -327,6 +327,7 @@ This method is the primary way to expand the system, enabling dynamic scaling. I
 
  <br>
 </details>
+javadoc -d doc -cp "lib\*;lib\javafx-sdk\lib\*;lib\aws-java-sdk-ec2.jar;lib\aws-java-sdk-cloudwatch.jar;lib\aws-java-sdk-autoscaling.jar" -sourcepath src -subpackages core:util:cli:gui:test -encoding UTF-8 -charset UTF-8
 </details>
 
 ---
@@ -345,13 +346,6 @@ This method is the primary way to expand the system, enabling dynamic scaling. I
  ![servermonitor](https://github.com/user-attachments/assets/ae6eaf44-5a68-4e74-b1e9-58c09c531a15)
  ![image](https://github.com/user-attachments/assets/dfdd709d-68a8-4c1b-86b4-c61136cab5f8)
 
-
-
-
- 
-
-
-
  <br>
 </details>
 </details>
@@ -369,6 +363,7 @@ This method is the primary way to expand the system, enabling dynamic scaling. I
 
  <br>
 </details>
+java -jar lib\junit.jar -cp "bin;lib\log4j-api-2.17.1.jar;lib\log4j-core-2.17.1.jar;lib\json-20230227.jar" --scan-classpath
 </details>
 
 ---
