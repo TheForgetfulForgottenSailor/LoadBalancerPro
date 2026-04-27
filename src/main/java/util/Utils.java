@@ -20,6 +20,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -137,6 +138,9 @@ public class Utils {
                                       Consumer<Integer> progressCallback, String csvDelimiter, boolean cloudEnabled,
                                       String timestamp) throws IOException {
         String delimiter = csvDelimiter != null ? csvDelimiter : ",";
+        if (delimiter.isEmpty()) {
+            throw new IllegalArgumentException("CSV delimiter cannot be empty");
+        }
         try (BufferedReader br = openBufferedReader(file)) {
             List<String> batch = new ArrayList<>(BATCH_SIZE);
             String line;
@@ -183,7 +187,7 @@ public class Utils {
     }
 
     private static Server parseCsvLine(String line, int lineNum, String delimiter) {
-        String[] parts = line.split(delimiter);
+        String[] parts = line.split(Pattern.quote(delimiter), -1);
         if (parts.length < CSV_MIN_FIELDS) {
             throw new IllegalArgumentException("Insufficient fields (" + parts.length + " < " + CSV_MIN_FIELDS + ")");
         }
@@ -408,6 +412,9 @@ public class Utils {
     private static double parseDouble(String value, String field, int lineNum) {
         try {
             double parsed = Double.parseDouble(value);
+            if (Double.isNaN(parsed) || Double.isInfinite(parsed)) {
+                throw new IllegalArgumentException(field + " must be finite: " + value);
+            }
             if (parsed < MIN_VALUE || parsed > MAX_VALUE) {
                 logger.warn("Line {}: {} value {} out of range [0, 100]; clamping.", lineNum, field, parsed);
                 return clamp(parsed);

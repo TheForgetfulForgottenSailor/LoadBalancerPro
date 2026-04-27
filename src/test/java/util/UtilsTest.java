@@ -200,6 +200,30 @@ class UtilsTest {
     }
 
     @Test
+    void testImportServerLogsRejectsNonFiniteCsvMetrics() throws IOException {
+        logger.info("Testing CSV import skips non-finite metrics");
+        Path csvFile = createTestFile("nonfinite.csv",
+            TEST_SERVER_ID_1 + ",NaN,30.0,40.0\n" + TEST_SERVER_ID_2 + ",20.0,30.0,40.0");
+
+        assertDoesNotThrow(() -> Utils.importServerLogs(csvFile.toString(), CSV_FORMAT, balancer),
+            "Should skip non-finite metrics and keep importing valid rows!");
+
+        assertEquals(1, balancer.getServers().size(), "Only the valid CSV row should be loaded!");
+        assertEquals(TEST_SERVER_ID_2, balancer.getServers().get(0).getServerId(), "Only S2 should be loaded!");
+    }
+
+    @Test
+    void testImportServerLogsTreatsCsvDelimiterLiterally() throws IOException {
+        logger.info("Testing CSV import with a regex metacharacter delimiter");
+        Path csvFile = createTestFile("pipe-delimited.csv", TEST_SERVER_ID_1 + "|30.0|40.0|50.0");
+
+        Utils.importServerLogs(csvFile.toString(), CSV_FORMAT, balancer, null, "|", true);
+
+        assertEquals(1, balancer.getServers().size(), "Pipe-delimited row should be loaded!");
+        assertServerAttributes(balancer.getServerMap().get(TEST_SERVER_ID_1), TEST_SERVER_ID_1, 30.0, 40.0, 50.0, DEFAULT_CAPACITY);
+    }
+
+    @Test
     void testImportServerLogsFromNonExistentFile() {
         logger.info("Testing import from non-existent file");
         String nonexistentFile = TEST_DIR.resolve("nonexistent.csv").toString();

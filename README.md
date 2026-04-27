@@ -1,6 +1,60 @@
 ## Chapter 18: Load Balancing and Monitoring 🌍⚙️  
 
 ---
+
+## Quick Start
+
+LoadBalancerPro now uses the standard Maven project layout under `src/main` and `src/test`.
+
+```bash
+mvn -q package
+```
+
+```bash
+mvn -q test
+```
+
+```bash
+mvn -q exec:java "-Dexec.mainClass=cli.LoadBalancerCLI"
+```
+
+The packaged JAR declares `gui.LoadBalancerGUI` as its main class. GUI launches still require JavaFX runtime modules on the module path, so the Maven CLI command above is the safest cross-platform smoke-run command while packaging stabilizes.
+
+## Cloud Safety Defaults
+
+Cloud operations are fail-closed by default. `CloudConfig` starts in dry-run/no-op mode unless `cloud.liveMode=true` is supplied through properties or a system property. In dry-run mode, AWS clients are not created, background cloud jobs are disabled, Auto Scaling Group creation is skipped, instance registration is skipped, and scaling actions do not mutate real cloud resources.
+
+Credential placeholders are rejected before cloud setup. Values such as `your-*`, `placeholder`, `mock_*`, `test_*`, `access-key`, and `secret-key` are treated as invalid so examples and test defaults cannot accidentally reach live AWS APIs.
+
+Destructive cloud actions must remain explicitly gated. Resource deletion requires both `cloud.allowResourceDeletion=true` and `cloud.confirmResourceOwnership=true`, and live mode must still be enabled separately. Do not remove these gates or make real cloud mutation the default behavior.
+
+## Runtime Model
+
+`LoadBalancer` owns the server collection, alert log, distribution state, and a single-thread executor for asynchronous imports. `ServerMonitor` owns its monitoring loop and alert executor. `CloudManager` owns cloud worker pools and scheduled background jobs, but those jobs only start when live mode is explicitly enabled. Shared server state is protected with the existing synchronized sections and concurrent collections; new code should keep ownership clear instead of adding ad hoc background threads.
+
+CSV import treats configured delimiters literally, rejects non-finite numeric metrics such as `NaN` and `Infinity`, skips malformed rows, and continues importing valid rows. JSON import uses structured `JSONArray`/`JSONObject` parsing and delegates per-server validation to `Server.fromJson`.
+
+## Release Notes
+
+For a release candidate, run:
+
+```bash
+mvn -q test
+mvn -q package
+```
+
+Tag only after the test suite is green and the cloud safety defaults above have been rechecked. AWS SDK v1 remains in use for this branch; migration to AWS SDK v2 is tracked as future work rather than part of this cleanup.
+
+## PR Summary: repo-hygiene-and-canonical-layout
+
+- Moved the project to the canonical Maven layout.
+- Cleaned repository hygiene so generated outputs and build artifacts are not part of normal source changes.
+- Preserved cloud dry-run/no-op defaults, placeholder credential rejection, and explicit deletion gates.
+- Added Maven packaging metadata for the GUI entry point.
+- Pinned Maven exec support for the documented CLI run command.
+- Hardened CSV import for literal delimiters and non-finite metrics.
+- Verified with `mvn -q test`.
+
 <details>
 <summary>🚀 <strong>How LoadBalancerPro Works - Full System Breakdown</strong></summary>
 
