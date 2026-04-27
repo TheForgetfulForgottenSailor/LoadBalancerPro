@@ -1,0 +1,23 @@
+# Build output
+target/
+bin/
+*.class
+
+# Runtime logs and local state
+*.log
+cloud_manager.log
+cli.config
+*.local
+*.local.*
+
+# IDE/editor files
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db

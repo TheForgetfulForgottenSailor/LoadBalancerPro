@@ -1,0 +1,12 @@
+.root {
+    -fx-background-color: white;
+    -fx-text-fill: black;
+}
+.table-view, .text-area, .list-view {
+    -fx-background-color: #f0f0f0;
+    -fx-text-fill: black;
+}
+.button, .toggle-button, .choice-box {
+    -fx-background-color: #e0e0e0;
+    -fx-text-fill: black;
+}
