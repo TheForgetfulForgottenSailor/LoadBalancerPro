@@ -184,7 +184,11 @@ class CloudManagerGuardrailTest {
                 CloudConfig.ALLOW_LIVE_MUTATION_PROPERTY, "true",
                 CloudConfig.OPERATOR_INTENT_PROPERTY, "LOADBALANCERPRO_LIVE_MUTATION",
                 CloudConfig.MAX_DESIRED_CAPACITY_PROPERTY, "10",
-                CloudConfig.MAX_SCALE_STEP_PROPERTY, "2");
+                CloudConfig.MAX_SCALE_STEP_PROPERTY, "2",
+                CLOUD_ENVIRONMENT_PROPERTY, DEPLOY_ENVIRONMENT,
+                CLOUD_ALLOWED_AWS_ACCOUNT_IDS_PROPERTY, ALLOWED_ACCOUNT_ID,
+                CLOUD_CURRENT_AWS_ACCOUNT_ID_PROPERTY, ALLOWED_ACCOUNT_ID,
+                CLOUD_ALLOWED_REGIONS_PROPERTY, "us-east-1");
 
         assertTrue(auditLog.contains("AUDIT cloud.scale.decision"));
         assertTrue(auditLog.contains("decision=ALLOW"));
@@ -238,7 +242,11 @@ class CloudManagerGuardrailTest {
         AmazonAutoScaling autoScaling = mock(AmazonAutoScaling.class);
         CloudConfig config = liveConfigWithMutationGuardrails(
                 CloudConfig.MAX_DESIRED_CAPACITY_PROPERTY, "10",
-                CloudConfig.MAX_SCALE_STEP_PROPERTY, "10");
+                CloudConfig.MAX_SCALE_STEP_PROPERTY, "10",
+                CLOUD_ENVIRONMENT_PROPERTY, DEPLOY_ENVIRONMENT,
+                CLOUD_ALLOWED_AWS_ACCOUNT_IDS_PROPERTY, ALLOWED_ACCOUNT_ID,
+                CLOUD_CURRENT_AWS_ACCOUNT_ID_PROPERTY, ALLOWED_ACCOUNT_ID,
+                CLOUD_ALLOWED_REGIONS_PROPERTY, "us-east-1");
         CloudManager manager = new CloudManager(new LoadBalancer(), config, null, null, autoScaling, null);
         AtomicBoolean callbackResult = new AtomicBoolean(false);
 

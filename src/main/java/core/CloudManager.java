@@ -679,7 +679,33 @@ public class CloudManager {
             auditScaleDecision("DENY", desiredCapacity, currentCapacity, scaleStep, source, "MAX_SCALE_STEP_EXCEEDED");
             return false;
         }
+        if (!canScaleInConfiguredEnvironment(desiredCapacity, currentCapacity, scaleStep, source)) {
+            return false;
+        }
         auditScaleDecision("ALLOW", desiredCapacity, currentCapacity, scaleStep, source, "GUARDRAILS_PASSED");
+        return true;
+    }
+
+    private boolean canScaleInConfiguredEnvironment(int desiredCapacity, int currentCapacity, int scaleStep,
+                                                    CloudMutationSource source) {
+        if (config.getEnvironment().isBlank()) {
+            auditScaleDecision("DENY", desiredCapacity, currentCapacity, scaleStep, source, "ENVIRONMENT_MISSING");
+            return false;
+        }
+        if (config.getAllowedAwsAccountIds().isEmpty()) {
+            auditScaleDecision("DENY", desiredCapacity, currentCapacity, scaleStep, source,
+                    "ALLOWED_ACCOUNT_LIST_MISSING");
+            return false;
+        }
+        if (config.getCurrentAwsAccountId().isBlank()
+                || !config.getAllowedAwsAccountIds().contains(config.getCurrentAwsAccountId())) {
+            auditScaleDecision("DENY", desiredCapacity, currentCapacity, scaleStep, source, "ACCOUNT_NOT_ALLOWED");
+            return false;
+        }
+        if (!config.getAllowedRegions().isEmpty() && !config.getAllowedRegions().contains(config.getRegion())) {
+            auditScaleDecision("DENY", desiredCapacity, currentCapacity, scaleStep, source, "REGION_NOT_ALLOWED");
+            return false;
+        }
         return true;
     }
 
@@ -692,7 +718,7 @@ public class CloudManager {
     private void auditScaleDecision(String decision, int desiredCapacity, int currentCapacity, int scaleStep,
                                     CloudMutationSource source, String reason) {
         logZeroCopy("AUDIT cloud.scale.decision decision=%s source=%s desiredCapacity=%s currentCapacity=%s scaleStep=%s "
-                        + "maxDesiredCapacity=%s maxScaleStep=%s asg=%s reason=%s",
+                        + "maxDesiredCapacity=%s maxScaleStep=%s environment=%s accountId=%s region=%s asg=%s reason=%s",
                 decision,
                 source,
                 desiredCapacity,
@@ -700,6 +726,9 @@ public class CloudManager {
                 scaleStep,
                 config.getMaxDesiredCapacity(),
                 config.getMaxScaleStep(),
+                config.getEnvironment(),
+                config.getCurrentAwsAccountId(),
+                config.getRegion(),
                 config.getAutoScalingGroupName(),
                 reason);
     }
