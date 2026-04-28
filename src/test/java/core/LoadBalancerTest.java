@@ -129,6 +129,14 @@ class LoadBalancerTest {
         }
     }
 
+    private Server serverWithWeightAndCapacity(String id, double cpu, double mem, double disk,
+                                               double weight, double capacity) {
+        Server server = new Server(id, cpu, mem, disk);
+        server.setWeight(weight);
+        server.setCapacity(capacity);
+        return server;
+    }
+
     /**
      * Tests the basic addition of a server to the LoadBalancer.
      *
@@ -162,6 +170,165 @@ class LoadBalancerTest {
         assertEquals(1, balancer.getServers().size(), "Duplicate ID should not create new entry!");
         assertEquals(20.0, balancer.getServerMap().get("S1").getCpuUsage(), 0.01, "Server S1 should have updated CPU!");
         logger.info("Duplicate server ID test passed: Second server overrode first.");
+    }
+
+    @Test
+    void testDuplicateServerReplacementUpdatesRegistryAndHashRing() {
+        logger.info("=== TESTING DUPLICATE SERVER REPLACEMENT STATE ===");
+        Server original = new Server("S1", 30.0, 40.0, 50.0);
+        Server replacement = new Server("S1", 10.0, 20.0, 30.0);
+        Server peer = new Server("S2", 15.0, 25.0, 35.0);
+
+        addServers(original);
+        Map<String, Double> beforeReplacement = balancer.consistentHashing(100.0, 20);
+        addServers(peer);
+
+        addServers(replacement);
+        Map<String, Double> afterReplacement = balancer.consistentHashing(100.0, 20);
+
+        assertEquals(2, balancer.getServers().size(), "Duplicate replacement should keep one S1 plus peer!");
+        assertSame(replacement, balancer.getServerMap().get("S1"), "Server map should point to replacement!");
+        assertFalse(balancer.getServers().contains(original), "Original server object should be removed!");
+        assertTrue(beforeReplacement.containsKey("S1"), "Original S1 should have participated in hash ring!");
+        assertTrue(afterReplacement.containsKey("S1"), "Replacement S1 should participate in hash ring!");
+        assertTrue(afterReplacement.keySet().stream().allMatch(id -> id.equals("S1") || id.equals("S2")),
+            "Hashing should only route to current registry servers!");
+    }
+
+    @Test
+    void testRoundRobinAccumulationFeedsRebalanceTotal() {
+        logger.info("=== TESTING ROUND ROBIN ACCUMULATION ===");
+        addServers(new Server("S1", 10.0, 20.0, 30.0), new Server("S2", 20.0, 30.0, 40.0));
+
+        Map<String, Double> first = balancer.roundRobin(100.0);
+        Map<String, Double> second = balancer.roundRobin(50.0);
+        Map<String, Double> rebalanced = balancer.rebalanceExistingLoad();
+
+        assertEquals(50.0, first.get("S1"), 0.01, "First split should allocate half to S1!");
+        assertEquals(50.0, first.get("S2"), 0.01, "First split should allocate half to S2!");
+        assertEquals(25.0, second.get("S1"), 0.01, "Second split should allocate half to S1!");
+        assertEquals(25.0, second.get("S2"), 0.01, "Second split should allocate half to S2!");
+        assertEquals(150.0, rebalanced.values().stream().mapToDouble(Double::doubleValue).sum(), 0.01,
+            "Rebalance should preserve accumulated distributed load!");
+    }
+
+    @Test
+    void testLeastLoadedWithUnequalLoadScoresKeepsCurrentEqualAllocation() {
+        logger.info("=== TESTING LEAST LOADED CURRENT ALLOCATION CONTRACT ===");
+        addServers(new Server("LOW", 0.0, 0.0, 30.0), new Server("HIGH", 90.0, 90.0, 90.0));
+
+        Map<String, Double> result = balancer.leastLoaded(80.0);
+
+        assertEquals(40.0, result.get("LOW"), 0.01, "Current least-loaded behavior allocates equal share to LOW!");
+        assertEquals(40.0, result.get("HIGH"), 0.01, "Current least-loaded behavior allocates equal share to HIGH!");
+    }
+
+    @Test
+    void testWeightedDistributionUsesServerWeights() {
+        logger.info("=== TESTING WEIGHTED DISTRIBUTION RATIOS ===");
+        addServers(
+            serverWithWeightAndCapacity("S1", 10.0, 20.0, 30.0, 1.0, 100.0),
+            serverWithWeightAndCapacity("S2", 20.0, 30.0, 40.0, 3.0, 100.0)
+        );
+
+        Map<String, Double> result = balancer.weightedDistribution(100.0);
+
+        assertEquals(25.0, result.get("S1"), 0.01, "Weight 1 server should receive one quarter!");
+        assertEquals(75.0, result.get("S2"), 0.01, "Weight 3 server should receive three quarters!");
+    }
+
+    @Test
+    void testCapacityAwareDistributionHonorsAvailableCapacity() {
+        logger.info("=== TESTING CAPACITY-AWARE DISTRIBUTION ===");
+        Server constrained = new Server("CONSTRAINED", 80.0, 80.0, 80.0);
+        constrained.setCapacity(100.0);
+        Server open = new Server("OPEN", 0.0, 0.0, 0.0);
+        open.setCapacity(100.0);
+        addServers(constrained, open);
+
+        Map<String, Double> result = balancer.capacityAware(60.0);
+
+        assertEquals(10.0, result.get("CONSTRAINED"), 0.01, "Constrained server should receive proportional capacity!");
+        assertEquals(50.0, result.get("OPEN"), 0.01, "Open server should receive remaining load!");
+    }
+
+    @Test
+    void testPredictiveDistributionChangesWithLoadFactor() {
+        logger.info("=== TESTING PREDICTIVE DISTRIBUTION LOAD FACTOR ===");
+        LoadBalancer baseline = new LoadBalancer(100.0, 10, 1.0);
+        LoadBalancer aggressive = new LoadBalancer(100.0, 10, 2.0);
+        try {
+            baseline.addServer(serverWithWeightAndCapacity("S1", 0.0, 0.0, 60.0, 1.0, 100.0));
+            baseline.addServer(serverWithWeightAndCapacity("S2", 60.0, 60.0, 30.0, 1.0, 100.0));
+            aggressive.addServer(serverWithWeightAndCapacity("S1", 0.0, 0.0, 60.0, 1.0, 100.0));
+            aggressive.addServer(serverWithWeightAndCapacity("S2", 60.0, 60.0, 30.0, 1.0, 100.0));
+
+            Map<String, Double> baselineResult = baseline.predictiveLoadBalancing(100.0);
+            Map<String, Double> aggressiveResult = aggressive.predictiveLoadBalancing(100.0);
+
+            assertEquals(61.54, baselineResult.get("S1"), 0.01, "Baseline factor should favor lower predicted load!");
+            assertEquals(38.46, baselineResult.get("S2"), 0.01, "Baseline factor should still allocate to S2!");
+            assertEquals(100.0, aggressiveResult.get("S1"), 0.01, "Higher factor should send all load to S1!");
+            assertFalse(aggressiveResult.containsKey("S2"), "S2 has no predicted spare capacity at factor 2.0!");
+        } finally {
+            baseline.shutdown();
+            aggressive.shutdown();
+        }
+    }
+
+    @Test
+    void testAllUnhealthyServersReturnEmptyDistribution() {
+        logger.info("=== TESTING ALL UNHEALTHY DISTRIBUTION ===");
+        Server s1 = new Server("S1", 10.0, 20.0, 30.0);
+        Server s2 = new Server("S2", 20.0, 30.0, 40.0);
+        s1.setHealthy(false);
+        s2.setHealthy(false);
+        addServers(s1, s2);
+
+        assertTrue(balancer.roundRobin(100.0).isEmpty(), "Round robin should skip all-unhealthy servers!");
+        assertTrue(balancer.leastLoaded(100.0).isEmpty(), "Least loaded should skip all-unhealthy servers!");
+        assertTrue(balancer.weightedDistribution(100.0).isEmpty(), "Weighted distribution should skip all-unhealthy servers!");
+        assertTrue(balancer.capacityAware(100.0).isEmpty(), "Capacity-aware should skip all-unhealthy servers!");
+        assertTrue(balancer.predictiveLoadBalancing(100.0).isEmpty(), "Predictive should skip all-unhealthy servers!");
+        assertTrue(balancer.consistentHashing(100.0, 10).isEmpty(), "Consistent hashing should skip all-unhealthy servers!");
+    }
+
+    @Test
+    void testDistributionStrategiesRejectNegativeData() {
+        logger.info("=== TESTING NEGATIVE DATA REJECTION ===");
+        addServers(new Server("S1", 10.0, 20.0, 30.0));
+
+        assertThrows(IllegalArgumentException.class, () -> balancer.roundRobin(-1.0));
+        assertThrows(IllegalArgumentException.class, () -> balancer.leastLoaded(-1.0));
+        assertThrows(IllegalArgumentException.class, () -> balancer.weightedDistribution(-1.0));
+        assertThrows(IllegalArgumentException.class, () -> balancer.capacityAware(-1.0));
+        assertThrows(IllegalArgumentException.class, () -> balancer.predictiveLoadBalancing(-1.0));
+        assertThrows(IllegalArgumentException.class, () -> balancer.consistentHashing(-1.0, 10));
+    }
+
+    @Test
+    void testRebalancePreservesTotalAndRespectsSelectedStrategy() {
+        logger.info("=== TESTING REBALANCE STRATEGY SELECTION ===");
+        addServers(
+            serverWithWeightAndCapacity("LOW", 0.0, 0.0, 0.0, 1.0, 100.0),
+            serverWithWeightAndCapacity("HIGH", 90.0, 90.0, 90.0, 1.0, 100.0)
+        );
+
+        balancer.roundRobin(120.0);
+        balancer.setStrategy(LoadBalancer.Strategy.LEAST_LOADED);
+        Map<String, Double> leastLoadedRebalance = balancer.rebalanceExistingLoad();
+        assertEquals(120.0, leastLoadedRebalance.values().stream().mapToDouble(Double::doubleValue).sum(), 0.01,
+            "Least-loaded rebalance should preserve total distributed load!");
+        assertEquals(60.0, leastLoadedRebalance.get("LOW"), 0.01, "Current least-loaded rebalance allocates equally!");
+        assertEquals(60.0, leastLoadedRebalance.get("HIGH"), 0.01, "Current least-loaded rebalance allocates equally!");
+
+        balancer.roundRobin(80.0);
+        balancer.setStrategy(LoadBalancer.Strategy.ROUND_ROBIN);
+        Map<String, Double> roundRobinRebalance = balancer.rebalanceExistingLoad();
+        assertEquals(200.0, roundRobinRebalance.values().stream().mapToDouble(Double::doubleValue).sum(), 0.01,
+            "Round-robin rebalance should preserve all accumulated load!");
+        assertEquals(100.0, roundRobinRebalance.get("LOW"), 0.01, "Round-robin rebalance should split evenly!");
+        assertEquals(100.0, roundRobinRebalance.get("HIGH"), 0.01, "Round-robin rebalance should split evenly!");
     }
 
     /**
