@@ -1,0 +1,146 @@
+{
+  "info": {
+    "name": "LoadBalancerPro",
+    "description": "Ready-to-import requests for the LoadBalancerPro Spring Boot API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "GET Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET Actuator Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/actuator/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST Capacity-Aware Allocation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestedLoad\": 120.0,\n  \"servers\": [\n    {\n      \"id\": \"api-1\",\n      \"cpuUsage\": 50.0,\n      \"memoryUsage\": 45.0,\n      \"diskUsage\": 40.0,\n      \"capacity\": 100.0,\n      \"weight\": 1.0,\n      \"healthy\": true\n    },\n    {\n      \"id\": \"api-2\",\n      \"cpuUsage\": 55.0,\n      \"memoryUsage\": 50.0,\n      \"diskUsage\": 45.0,\n      \"capacity\": 100.0,\n      \"weight\": 1.0,\n      \"healthy\": true\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/allocate/capacity-aware",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "allocate",
+            "capacity-aware"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST Predictive Allocation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestedLoad\": 80.0,\n  \"servers\": [\n    {\n      \"id\": \"worker-1\",\n      \"cpuUsage\": 40.0,\n      \"memoryUsage\": 35.0,\n      \"diskUsage\": 30.0,\n      \"capacity\": 120.0,\n      \"weight\": 1.0,\n      \"healthy\": true\n    },\n    {\n      \"id\": \"worker-2\",\n      \"cpuUsage\": 65.0,\n      \"memoryUsage\": 60.0,\n      \"diskUsage\": 55.0,\n      \"capacity\": 120.0,\n      \"weight\": 1.0,\n      \"healthy\": true\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/allocate/predictive",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "allocate",
+            "predictive"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST Invalid Request",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestedLoad\": -10.0,\n  \"servers\": [\n    {\n      \"id\": \"\",\n      \"cpuUsage\": 150.0,\n      \"memoryUsage\": 25.0,\n      \"diskUsage\": 25.0,\n      \"capacity\": 100.0,\n      \"weight\": 1.0,\n      \"healthy\": true\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/allocate/capacity-aware",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "allocate",
+            "capacity-aware"
+          ]
+        }
+      }
+    }
+  ]
+}
