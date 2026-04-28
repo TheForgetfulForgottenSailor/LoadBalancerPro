@@ -316,6 +316,68 @@ class LoadBalancerTest {
     }
 
     @Test
+    void testCapacityAwareSkipsServerWithNoAvailableCapacity() {
+        logger.info("=== TESTING CAPACITY-AWARE ZERO AVAILABLE CAPACITY ===");
+        Server unavailable = new Server("FULL", 0.0, 0.0, 0.0);
+        unavailable.setCapacity(0.0);
+        Server available = new Server("OPEN", 0.0, 0.0, 0.0);
+        available.setCapacity(100.0);
+        addServers(unavailable, available);
+
+        Map<String, Double> result = balancer.capacityAware(50.0);
+
+        assertFalse(result.containsKey("FULL"), "Server with no available capacity should receive no allocation!");
+        assertEquals(50.0, result.get("OPEN"), 0.01, "Available server should receive requested load!");
+    }
+
+    @Test
+    void testCapacityAwareWithDemandAboveAvailableCapacityPreservesCurrentOverflowBehavior() {
+        logger.info("=== TESTING CAPACITY-AWARE CURRENT OVERFLOW CONTRACT ===");
+        Server small = new Server("SMALL", 0.0, 0.0, 0.0);
+        small.setCapacity(30.0);
+        Server large = new Server("LARGE", 0.0, 0.0, 0.0);
+        large.setCapacity(70.0);
+        addServers(small, large);
+
+        Map<String, Double> result = balancer.capacityAware(150.0);
+
+        assertEquals(45.0, result.get("SMALL"), 0.01, "Current behavior can exceed SMALL available capacity!");
+        assertEquals(105.0, result.get("LARGE"), 0.01, "Current behavior can exceed LARGE available capacity!");
+    }
+
+    @Test
+    void testCapacityAwareAllServersAtOrOverCapacityReturnsEmptyMap() {
+        logger.info("=== TESTING CAPACITY-AWARE ALL SERVERS FULL ===");
+        Server full = new Server("FULL", 50.0, 50.0, 50.0);
+        full.setCapacity(50.0);
+        Server over = new Server("OVER", 80.0, 80.0, 80.0);
+        over.setCapacity(60.0);
+        addServers(full, over);
+
+        Map<String, Double> result = balancer.capacityAware(100.0);
+
+        assertTrue(result.isEmpty(), "Servers with no positive available capacity should receive no allocation!");
+    }
+
+    @Test
+    void testCapacityAwareMixedCapacitiesPreservesCurrentProportionalAllocation() {
+        logger.info("=== TESTING CAPACITY-AWARE MIXED CAPACITIES ===");
+        Server constrained = new Server("CONSTRAINED", 80.0, 80.0, 80.0);
+        constrained.setCapacity(100.0);
+        Server open = new Server("OPEN", 20.0, 20.0, 20.0);
+        open.setCapacity(120.0);
+        Server full = new Server("FULL", 50.0, 50.0, 50.0);
+        full.setCapacity(50.0);
+        addServers(constrained, open, full);
+
+        Map<String, Double> result = balancer.capacityAware(60.0);
+
+        assertEquals(10.0, result.get("CONSTRAINED"), 0.01, "Constrained server should receive proportional allocation!");
+        assertEquals(50.0, result.get("OPEN"), 0.01, "Open server should receive proportional allocation!");
+        assertFalse(result.containsKey("FULL"), "Full server should receive no allocation!");
+    }
+
+    @Test
     void testPredictiveDistributionChangesWithLoadFactor() {
         logger.info("=== TESTING PREDICTIVE DISTRIBUTION LOAD FACTOR ===");
         LoadBalancer baseline = new LoadBalancer(100.0, 10, 1.0);
