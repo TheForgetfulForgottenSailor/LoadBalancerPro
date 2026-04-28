@@ -275,25 +275,33 @@ public class LoadBalancer {
     }
 
     public Map<String, Double> capacityAware(double totalData) {
+        return capacityAwareWithResult(totalData).allocations();
+    }
+
+    public LoadDistributionResult capacityAwareWithResult(double totalData) {
         validateDistributionInput(totalData);
-        return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = LoadDistributionPlanner.capacityAware(servers, totalData);
-            for (Map.Entry<String, Double> entry : dist.entrySet()) {
+        return distributeWithHealthyServersResult(totalData, servers -> {
+            LoadDistributionResult result = LoadDistributionPlanner.capacityAwareResult(servers, totalData);
+            for (Map.Entry<String, Double> entry : result.allocations().entrySet()) {
                 currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
-            return dist;
+            return result;
         });
     }
 
     public Map<String, Double> predictiveLoadBalancing(double totalData) {
+        return predictiveLoadBalancingWithResult(totalData).allocations();
+    }
+
+    public LoadDistributionResult predictiveLoadBalancingWithResult(double totalData) {
         validateDistributionInput(totalData);
-        return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = LoadDistributionPlanner.predictive(
+        return distributeWithHealthyServersResult(totalData, servers -> {
+            LoadDistributionResult result = LoadDistributionPlanner.predictiveResult(
                 servers, totalData, calculatePredictedLoads(servers));
-            for (Map.Entry<String, Double> entry : dist.entrySet()) {
+            for (Map.Entry<String, Double> entry : result.allocations().entrySet()) {
                 currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
-            return dist;
+            return result;
         });
     }
 
@@ -523,6 +531,25 @@ public class LoadBalancer {
             if (healthy.isEmpty()) {
                 logger.warn("No healthy servers available for distribution.");
                 return Collections.emptyMap();
+            }
+            return distributor.apply(healthy);
+        } finally {
+            serverLock.readLock().unlock();
+        }
+    }
+
+    private LoadDistributionResult distributeWithHealthyServersResult(
+            double totalData, Function<List<Server>, LoadDistributionResult> distributor) {
+        serverLock.readLock().lock();
+        try {
+            if (servers.isEmpty()) {
+                logger.info("No servers available.");
+                return new LoadDistributionResult(Collections.emptyMap(), totalData);
+            }
+            List<Server> healthy = getHealthyServers();
+            if (healthy.isEmpty()) {
+                logger.warn("No healthy servers available for distribution.");
+                return new LoadDistributionResult(Collections.emptyMap(), totalData);
             }
             return distributor.apply(healthy);
         } finally {

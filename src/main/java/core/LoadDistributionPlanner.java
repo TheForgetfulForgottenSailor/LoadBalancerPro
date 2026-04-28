@@ -50,6 +50,10 @@ final class LoadDistributionPlanner {
     }
 
     static Map<String, Double> capacityAware(List<Server> healthyServers, double totalData) {
+        return capacityAwareResult(healthyServers, totalData).allocations();
+    }
+
+    static LoadDistributionResult capacityAwareResult(List<Server> healthyServers, double totalData) {
         Map<String, Double> distribution = new LinkedHashMap<>();
         List<Server> sorted = healthyServers.stream()
                 .filter(s -> availableCapacity(s) > 0)
@@ -70,11 +74,16 @@ final class LoadDistributionPlanner {
                 break;
             }
         }
-        return distribution;
+        return new LoadDistributionResult(distribution, remaining);
     }
 
     static Map<String, Double> predictive(List<Server> healthyServers, double totalData,
                                           Map<String, Double> predictedLoads) {
+        return predictiveResult(healthyServers, totalData, predictedLoads).allocations();
+    }
+
+    static LoadDistributionResult predictiveResult(List<Server> healthyServers, double totalData,
+                                                   Map<String, Double> predictedLoads) {
         Map<String, Double> distribution = new LinkedHashMap<>();
         List<Server> sorted = healthyServers.stream()
                 .filter(s -> predictedAvailableCapacity(s, predictedLoads) > 0)
@@ -95,7 +104,7 @@ final class LoadDistributionPlanner {
                 break;
             }
         }
-        return distribution;
+        return new LoadDistributionResult(distribution, remaining);
     }
 
     private static double availableCapacity(Server server) {

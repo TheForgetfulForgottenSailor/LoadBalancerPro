@@ -1,6 +1,7 @@
 package test.core;
 
 import core.LoadBalancer;
+import core.LoadDistributionResult;
 import core.Server;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -317,6 +318,22 @@ class LoadBalancerTest {
     }
 
     @Test
+    void testCapacityAwareResultReportsNoUnallocatedLoadWhenCapacityIsSufficient() {
+        logger.info("=== TESTING CAPACITY-AWARE RESULT WITH SUFFICIENT CAPACITY ===");
+        Server constrained = new Server("CONSTRAINED", 80.0, 80.0, 80.0);
+        constrained.setCapacity(100.0);
+        Server open = new Server("OPEN", 0.0, 0.0, 0.0);
+        open.setCapacity(100.0);
+        addServers(constrained, open);
+
+        LoadDistributionResult result = balancer.capacityAwareWithResult(60.0);
+
+        assertEquals(0.0, result.unallocatedLoad(), 0.01, "Sufficient capacity should leave no unallocated load!");
+        assertEquals(10.0, result.allocations().get("CONSTRAINED"), 0.01);
+        assertEquals(50.0, result.allocations().get("OPEN"), 0.01);
+    }
+
+    @Test
     void testCapacityAwareSkipsServerWithNoAvailableCapacity() {
         logger.info("=== TESTING CAPACITY-AWARE ZERO AVAILABLE CAPACITY ===");
         Server unavailable = new Server("FULL", 0.0, 0.0, 0.0);
@@ -346,6 +363,22 @@ class LoadBalancerTest {
         assertEquals(70.0, result.get("LARGE"), 0.01, "LARGE should not receive more than available capacity!");
         assertEquals(100.0, result.values().stream().mapToDouble(Double::doubleValue).sum(), 0.01,
             "Excess requested load should remain unallocated!");
+    }
+
+    @Test
+    void testCapacityAwareResultReportsUnallocatedLoadWhenCapped() {
+        logger.info("=== TESTING CAPACITY-AWARE UNALLOCATED LOAD REPORTING ===");
+        Server small = new Server("SMALL", 0.0, 0.0, 0.0);
+        small.setCapacity(30.0);
+        Server large = new Server("LARGE", 0.0, 0.0, 0.0);
+        large.setCapacity(70.0);
+        addServers(small, large);
+
+        LoadDistributionResult result = balancer.capacityAwareWithResult(150.0);
+
+        assertEquals(30.0, result.allocations().get("SMALL"), 0.01);
+        assertEquals(70.0, result.allocations().get("LARGE"), 0.01);
+        assertEquals(50.0, result.unallocatedLoad(), 0.01, "Capped excess load should be reported!");
     }
 
     @Test
@@ -503,6 +536,41 @@ class LoadBalancerTest {
         } finally {
             aggressive.shutdown();
         }
+    }
+
+    @Test
+    void testPredictiveResultReportsUnallocatedLoadWhenCapped() {
+        logger.info("=== TESTING PREDICTIVE UNALLOCATED LOAD REPORTING ===");
+        LoadBalancer aggressive = new LoadBalancer(100.0, 10, 2.0);
+        try {
+            aggressive.addServer(serverWithWeightAndCapacity("EXHAUSTED", 60.0, 60.0, 60.0, 1.0, 100.0));
+            aggressive.addServer(serverWithWeightAndCapacity("AVAILABLE", 20.0, 20.0, 20.0, 1.0, 100.0));
+
+            LoadDistributionResult result = aggressive.predictiveLoadBalancingWithResult(150.0);
+
+            assertFalse(result.allocations().containsKey("EXHAUSTED"));
+            assertEquals(60.0, result.allocations().get("AVAILABLE"), 0.01);
+            assertEquals(90.0, result.unallocatedLoad(), 0.01, "Predictive capped excess should be reported!");
+        } finally {
+            aggressive.shutdown();
+        }
+    }
+
+    @Test
+    void testExistingMapReturningDistributionMethodsStillWork() {
+        logger.info("=== TESTING EXISTING MAP-RETURNING DISTRIBUTION METHODS ===");
+        addServers(
+            serverWithWeightAndCapacity("S1", 25.0, 25.0, 25.0, 1.0, 100.0),
+            serverWithWeightAndCapacity("S2", 25.0, 25.0, 25.0, 1.0, 100.0)
+        );
+
+        Map<String, Double> capacityAware = balancer.capacityAware(80.0);
+        Map<String, Double> predictive = balancer.predictiveLoadBalancing(80.0);
+
+        assertEquals(40.0, capacityAware.get("S1"), 0.01);
+        assertEquals(40.0, capacityAware.get("S2"), 0.01);
+        assertEquals(40.0, predictive.get("S1"), 0.01);
+        assertEquals(40.0, predictive.get("S2"), 0.01);
     }
 
     @Test
