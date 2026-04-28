@@ -255,6 +255,52 @@ class LoadBalancerTest {
     }
 
     @Test
+    void testWeightedDistributionAllowsZeroWeightServerToReceiveZeroAllocation() {
+        logger.info("=== TESTING WEIGHTED DISTRIBUTION WITH ZERO-WEIGHT SERVER ===");
+        addServers(
+            serverWithWeightAndCapacity("S1", 10.0, 20.0, 30.0, 5.0, 100.0),
+            serverWithWeightAndCapacity("S2", 20.0, 30.0, 40.0, 0.0, 100.0),
+            serverWithWeightAndCapacity("S3", 30.0, 40.0, 50.0, 5.0, 100.0)
+        );
+
+        Map<String, Double> result = balancer.weightedDistribution(100.0);
+
+        assertEquals(50.0, result.get("S1"), 0.01, "Weight 5 server should receive half!");
+        assertEquals(0.0, result.get("S2"), 0.01, "Zero-weight server should receive zero allocation!");
+        assertEquals(50.0, result.get("S3"), 0.01, "Weight 5 server should receive half!");
+    }
+
+    @Test
+    void testWeightedDistributionUsesUnequalWeightsProportionally() {
+        logger.info("=== TESTING WEIGHTED DISTRIBUTION UNEQUAL RATIOS ===");
+        addServers(
+            serverWithWeightAndCapacity("S1", 10.0, 20.0, 30.0, 1.0, 100.0),
+            serverWithWeightAndCapacity("S2", 20.0, 30.0, 40.0, 2.0, 100.0),
+            serverWithWeightAndCapacity("S3", 30.0, 40.0, 50.0, 3.0, 100.0)
+        );
+
+        Map<String, Double> result = balancer.weightedDistribution(120.0);
+
+        assertEquals(20.0, result.get("S1"), 0.01, "Weight 1 server should receive one sixth!");
+        assertEquals(40.0, result.get("S2"), 0.01, "Weight 2 server should receive two sixths!");
+        assertEquals(60.0, result.get("S3"), 0.01, "Weight 3 server should receive three sixths!");
+    }
+
+    @Test
+    void testWeightedDistributionWithAllZeroWeightsCurrentlyReturnsNaNAllocations() {
+        logger.info("=== TESTING CURRENT ALL-ZERO WEIGHTED DISTRIBUTION CONTRACT ===");
+        addServers(
+            serverWithWeightAndCapacity("S1", 10.0, 20.0, 30.0, 0.0, 100.0),
+            serverWithWeightAndCapacity("S2", 20.0, 30.0, 40.0, 0.0, 100.0)
+        );
+
+        Map<String, Double> result = balancer.weightedDistribution(100.0);
+
+        assertTrue(Double.isNaN(result.get("S1")), "All-zero weights currently produce NaN for S1!");
+        assertTrue(Double.isNaN(result.get("S2")), "All-zero weights currently produce NaN for S2!");
+    }
+
+    @Test
     void testCapacityAwareDistributionHonorsAvailableCapacity() {
         logger.info("=== TESTING CAPACITY-AWARE DISTRIBUTION ===");
         Server constrained = new Server("CONSTRAINED", 80.0, 80.0, 80.0);
