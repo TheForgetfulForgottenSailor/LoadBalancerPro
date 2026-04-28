@@ -1,7 +1,8 @@
 package core;
 
-import java.util.HashMap;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -49,20 +50,20 @@ final class LoadDistributionPlanner {
     }
 
     static Map<String, Double> capacityAware(List<Server> healthyServers, double totalData) {
-        Map<String, Double> distribution = new HashMap<>();
+        Map<String, Double> distribution = new LinkedHashMap<>();
         List<Server> sorted = healthyServers.stream()
-                .sorted(Comparator.comparingDouble(s -> s.getLoadScore() / s.getCapacity()))
+                .filter(s -> availableCapacity(s) > 0)
+                .sorted(Comparator.comparingDouble((Server s) -> s.getLoadScore() / s.getCapacity())
+                        .thenComparing(Server::getServerId))
                 .toList();
         double totalCapacity = sorted.stream()
-                .mapToDouble(s -> s.getCapacity() - s.getLoadScore())
+                .mapToDouble(LoadDistributionPlanner::availableCapacity)
                 .sum();
         double remaining = totalData;
         for (Server server : sorted) {
-            double availableCapacity = server.getCapacity() - server.getLoadScore();
-            if (availableCapacity <= 0) {
-                continue;
-            }
-            double allocation = Math.min(remaining, (availableCapacity / totalCapacity) * totalData);
+            double availableCapacity = availableCapacity(server);
+            double proportionalAllocation = (availableCapacity / totalCapacity) * totalData;
+            double allocation = Math.min(Math.min(remaining, proportionalAllocation), availableCapacity);
             distribution.put(server.getServerId(), allocation);
             remaining -= allocation;
             if (remaining <= 0) {
@@ -70,5 +71,9 @@ final class LoadDistributionPlanner {
             }
         }
         return distribution;
+    }
+
+    private static double availableCapacity(Server server) {
+        return server.getCapacity() - server.getLoadScore();
     }
 }

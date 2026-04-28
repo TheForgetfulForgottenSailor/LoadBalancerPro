@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import org.apache.logging.log4j.LogManager;
@@ -331,8 +332,8 @@ class LoadBalancerTest {
     }
 
     @Test
-    void testCapacityAwareWithDemandAboveAvailableCapacityPreservesCurrentOverflowBehavior() {
-        logger.info("=== TESTING CAPACITY-AWARE CURRENT OVERFLOW CONTRACT ===");
+    void testCapacityAwareWithDemandAboveAvailableCapacityDoesNotOverflow() {
+        logger.info("=== TESTING CAPACITY-AWARE CAPACITY CEILING ===");
         Server small = new Server("SMALL", 0.0, 0.0, 0.0);
         small.setCapacity(30.0);
         Server large = new Server("LARGE", 0.0, 0.0, 0.0);
@@ -341,8 +342,10 @@ class LoadBalancerTest {
 
         Map<String, Double> result = balancer.capacityAware(150.0);
 
-        assertEquals(45.0, result.get("SMALL"), 0.01, "Current behavior can exceed SMALL available capacity!");
-        assertEquals(105.0, result.get("LARGE"), 0.01, "Current behavior can exceed LARGE available capacity!");
+        assertEquals(30.0, result.get("SMALL"), 0.01, "SMALL should not receive more than available capacity!");
+        assertEquals(70.0, result.get("LARGE"), 0.01, "LARGE should not receive more than available capacity!");
+        assertEquals(100.0, result.values().stream().mapToDouble(Double::doubleValue).sum(), 0.01,
+            "Excess requested load should remain unallocated!");
     }
 
     @Test
@@ -375,6 +378,29 @@ class LoadBalancerTest {
         assertEquals(10.0, result.get("CONSTRAINED"), 0.01, "Constrained server should receive proportional allocation!");
         assertEquals(50.0, result.get("OPEN"), 0.01, "Open server should receive proportional allocation!");
         assertFalse(result.containsKey("FULL"), "Full server should receive no allocation!");
+    }
+
+    @Test
+    void testCapacityAwareDistributionIsDeterministicForTiedLoadRatios() {
+        logger.info("=== TESTING CAPACITY-AWARE DETERMINISTIC TIE ORDER ===");
+        LoadBalancer first = new LoadBalancer();
+        LoadBalancer second = new LoadBalancer();
+        try {
+            first.addServer(serverWithWeightAndCapacity("B", 0.0, 0.0, 0.0, 1.0, 80.0));
+            first.addServer(serverWithWeightAndCapacity("A", 0.0, 0.0, 0.0, 1.0, 40.0));
+            second.addServer(serverWithWeightAndCapacity("A", 0.0, 0.0, 0.0, 1.0, 40.0));
+            second.addServer(serverWithWeightAndCapacity("B", 0.0, 0.0, 0.0, 1.0, 80.0));
+
+            Map<String, Double> firstResult = first.capacityAware(60.0);
+            Map<String, Double> secondResult = second.capacityAware(60.0);
+
+            assertEquals(firstResult, secondResult, "Capacity-aware allocation should not depend on insertion order!");
+            assertIterableEquals(List.of("A", "B"), firstResult.keySet(),
+                "Tied load ratios should use server ID order for deterministic output!");
+        } finally {
+            first.shutdown();
+            second.shutdown();
+        }
     }
 
     @Test
