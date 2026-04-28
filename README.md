@@ -62,6 +62,26 @@ GET /actuator/info
 GET /actuator/metrics
 ```
 
+## CORS and Security
+
+The API includes a safe default browser configuration for local development and demos. CORS is enabled for `/api/**` from:
+
+```text
+http://localhost:3000
+http://localhost:8080
+```
+
+Allowed methods are `GET`, `POST`, and `OPTIONS`. Allowed request headers are `Content-Type` and `Authorization`, with credentials disabled.
+
+Responses include lightweight security headers without adding an authentication framework:
+
+```text
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Cache-Control: no-store
+```
+
 The API validates allocation requests before they reach the allocator. Invalid request bodies return HTTP 400 with a structured response:
 
 ```json
