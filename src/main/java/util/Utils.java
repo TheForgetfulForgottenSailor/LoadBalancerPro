@@ -94,14 +94,14 @@ public class Utils {
         AtomicLong startTime = new AtomicLong(System.nanoTime());
         File file = new File(filePath);
         int totalLines = estimateLineCount(file);
-        AtomicInteger processed = new AtomicInteger(0);
+        AtomicInteger progressCount = new AtomicInteger(0);
         ImportDiagnostics diagnostics = new ImportDiagnostics();
 
         format = format.toLowerCase();
         if (format.startsWith("csv")) {
-            importFromCsv(file, balancer, processed, totalLines, progressCallback, csvDelimiter, cloudEnabled, timestamp, diagnostics);
+            importFromCsv(file, balancer, progressCount, totalLines, progressCallback, csvDelimiter, cloudEnabled, timestamp, diagnostics);
         } else if (format.startsWith("json")) {
-            importFromJson(file, balancer, processed, totalLines, progressCallback, cloudEnabled, timestamp, diagnostics);
+            importFromJson(file, balancer, progressCount, totalLines, progressCallback, cloudEnabled, timestamp, diagnostics);
         } else {
             throw new IllegalArgumentException("Unsupported format: " + format + ". Use 'csv[.gz]' or 'json[.gz]'");
         }
@@ -130,7 +130,7 @@ public class Utils {
             file.getName().endsWith(".gz") ? new GZIPInputStream(fis) : fis, StandardCharsets.UTF_8));
     }
 
-    private static void importFromCsv(File file, LoadBalancer balancer, AtomicInteger processed, int totalLines,
+    private static void importFromCsv(File file, LoadBalancer balancer, AtomicInteger progressCount, int totalLines,
                                       Consumer<Integer> progressCallback, String csvDelimiter, boolean cloudEnabled,
                                       String timestamp, ImportDiagnostics diagnostics) throws IOException {
         String delimiter = CsvServerLogParser.normalizeDelimiter(csvDelimiter);
@@ -143,13 +143,13 @@ public class Utils {
                 if (line.trim().isEmpty()) continue;
                 batch.add(line);
                 if (batch.size() >= BATCH_SIZE) {
-                    processCsvBatch(batch, lineNum - batch.size() + 1, balancer, processed, totalLines,
+                    processCsvBatch(batch, lineNum - batch.size() + 1, balancer, progressCount, totalLines,
                                     progressCallback, delimiter, cloudEnabled, timestamp, diagnostics);
                     batch.clear();
                 }
             }
             if (!batch.isEmpty()) {
-                processCsvBatch(batch, lineNum - batch.size() + 1, balancer, processed, totalLines,
+                processCsvBatch(batch, lineNum - batch.size() + 1, balancer, progressCount, totalLines,
                                 progressCallback, delimiter, cloudEnabled, timestamp, diagnostics);
             }
         } catch (IOException e) {
@@ -159,7 +159,7 @@ public class Utils {
     }
 
     private static void processCsvBatch(List<String> batch, int startLineNum, LoadBalancer balancer,
-                                        AtomicInteger processed, int totalLines, Consumer<Integer> progressCallback,
+                                        AtomicInteger progressCount, int totalLines, Consumer<Integer> progressCallback,
                                         String delimiter, boolean cloudEnabled, String timestamp, ImportDiagnostics diagnostics) {
         for (int i = 0; i < batch.size(); i++) {
             String line = batch.get(i);
@@ -175,7 +175,7 @@ public class Utils {
                     logger.debug("[{}] Line {}: Skipping non-cloud server {} as cloud is disabled.", 
                                  timestamp, lineNum, server.getServerId());
                 }
-                updateProgress(processed, totalLines, progressCallback);
+                updateProgress(progressCount, totalLines, progressCallback);
             } catch (Exception e) {
                 diagnostics.recordSkipped();
                 logger.error("[{}] Line {}: Failed to parse CSV line '{}': {}", timestamp, lineNum, line, e.getMessage(), e);
@@ -183,7 +183,7 @@ public class Utils {
         }
     }
 
-    private static void importFromJson(File file, LoadBalancer balancer, AtomicInteger processed, int totalLines,
+    private static void importFromJson(File file, LoadBalancer balancer, AtomicInteger progressCount, int totalLines,
                                        Consumer<Integer> progressCallback, boolean cloudEnabled, String timestamp,
                                        ImportDiagnostics diagnostics) throws IOException {
         String jsonContent = readJsonWithRetries(file, timestamp);
@@ -203,7 +203,7 @@ public class Utils {
         }
         for (int i = 0; i < jsonArray.length(); i += BATCH_SIZE) {
             int end = Math.min(i + BATCH_SIZE, jsonArray.length());
-            processJsonBatch(jsonArray, i, end, balancer, processed, totalLines, progressCallback, cloudEnabled, timestamp, diagnostics);
+            processJsonBatch(jsonArray, i, end, balancer, progressCount, totalLines, progressCallback, cloudEnabled, timestamp, diagnostics);
         }
     }
 
@@ -227,7 +227,7 @@ public class Utils {
     }
 
     private static void processJsonBatch(JSONArray jsonArray, int start, int end, LoadBalancer balancer,
-                                         AtomicInteger processed, int totalLines, Consumer<Integer> progressCallback,
+                                         AtomicInteger progressCount, int totalLines, Consumer<Integer> progressCallback,
                                          boolean cloudEnabled, String timestamp, ImportDiagnostics diagnostics) {
         for (int i = start; i < end; i++) {
             diagnostics.recordSeen();
@@ -246,7 +246,7 @@ public class Utils {
                     logger.debug("[{}] JSON entry {}: Skipping non-cloud server {} as cloud is disabled.", 
                                  timestamp, i, server.getServerId());
                 }
-                updateProgress(processed, totalLines, progressCallback);
+                updateProgress(progressCount, totalLines, progressCallback);
             } catch (Exception e) {
                 diagnostics.recordSkipped();
                 logger.error("[{}] JSON entry {}: Failed to parse: {}", timestamp, i, e.getMessage(), e);
@@ -254,6 +254,10 @@ public class Utils {
         }
     }
 
+    /**
+     * Tracks import result counts separately from progress callback accounting.
+     * Progress currently advances only for successfully parsed entries to preserve callback behavior.
+     */
     private static final class ImportDiagnostics {
         private int totalSeen;
         private int imported;
