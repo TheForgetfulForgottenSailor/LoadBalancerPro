@@ -34,4 +34,14 @@ final class LoadDistributionPlanner {
         }
         return distribution;
     }
+
+    static Map<String, Double> weighted(List<Server> healthyServers, double totalData) {
+        Map<String, Double> distribution = new HashMap<>();
+        double totalWeight = healthyServers.stream().mapToDouble(Server::getWeight).sum();
+        for (Server server : healthyServers) {
+            double allocation = (server.getWeight() / totalWeight) * totalData;
+            distribution.put(server.getServerId(), allocation);
+        }
+        return distribution;
+    }
 }

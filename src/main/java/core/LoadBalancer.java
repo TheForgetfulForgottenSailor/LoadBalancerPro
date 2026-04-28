@@ -230,12 +230,9 @@ public class LoadBalancer {
     public Map<String, Double> weightedDistribution(double totalData) {
         validateDistributionInput(totalData);
         return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = new HashMap<>();
-            double totalWeight = servers.stream().mapToDouble(Server::getWeight).sum();
-            for (Server server : servers) {
-                double alloc = (server.getWeight() / totalWeight) * totalData;
-                dist.put(server.getServerId(), alloc);
-                currentDistribution.merge(server.getServerId(), alloc, Double::sum);
+            Map<String, Double> dist = LoadDistributionPlanner.weighted(servers, totalData);
+            for (Map.Entry<String, Double> entry : dist.entrySet()) {
+                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
             return dist;
         });
