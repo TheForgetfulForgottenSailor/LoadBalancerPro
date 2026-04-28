@@ -33,11 +33,28 @@ public class AllocatorService {
                     : balancer.predictiveLoadBalancingWithResult(request.requestedLoad());
             ScalingRecommendation recommendation = balancer.recommendScaling(
                     result.unallocatedLoad(), averageHealthyCapacity(request.servers()));
+            ScalingSimulationResult simulation = simulateScaling(result.unallocatedLoad(), recommendation);
             return new AllocationResponse(
-                    result.allocations(), result.unallocatedLoad(), recommendation.additionalServers());
+                    result.allocations(),
+                    result.unallocatedLoad(),
+                    recommendation.additionalServers(),
+                    simulation);
         } finally {
             balancer.shutdown();
         }
+    }
+
+    private static ScalingSimulationResult simulateScaling(
+            double unallocatedLoad, ScalingRecommendation recommendation) {
+        String reason;
+        if (recommendation.additionalServers() > 0) {
+            reason = "Unallocated load exceeds available capacity; simulated scale-up recommended.";
+        } else if (unallocatedLoad > 0.0) {
+            reason = "Unallocated load exists, but target capacity is unavailable; no scale-up count simulated.";
+        } else {
+            reason = "No unallocated load requiring scale-up.";
+        }
+        return new ScalingSimulationResult(recommendation.additionalServers(), reason, true);
     }
 
     private static void validateRequest(AllocationRequest request) {

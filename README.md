@@ -113,7 +113,12 @@ Example response:
     "worker-1": 20.0
   },
   "unallocatedLoad": 45.0,
-  "recommendedAdditionalServers": 1
+  "recommendedAdditionalServers": 1,
+  "scalingSimulation": {
+    "recommendedAdditionalServers": 1,
+    "reason": "Unallocated load exceeds available capacity; simulated scale-up recommended.",
+    "simulatedOnly": true
+  }
 }
 ```
 
@@ -121,5 +126,6 @@ Example response:
 
 - The REST API creates request-scoped `LoadBalancer` instances.
 - Allocation APIs are calculation-only.
+- Scaling recommendations are simulation-only and never call `CloudManager` or AWS.
 - Cloud operations remain behind existing `CloudManager` safety defaults.
 - No API endpoint performs live AWS mutation or automatic scaling.

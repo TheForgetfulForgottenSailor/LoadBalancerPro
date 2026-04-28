@@ -5,5 +5,6 @@ import java.util.Map;
 public record AllocationResponse(
         Map<String, Double> allocations,
         double unallocatedLoad,
-        int recommendedAdditionalServers) {
+        int recommendedAdditionalServers,
+        ScalingSimulationResult scalingSimulation) {
 }
