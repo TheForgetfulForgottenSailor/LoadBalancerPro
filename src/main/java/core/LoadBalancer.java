@@ -208,11 +208,9 @@ public class LoadBalancer {
     public Map<String, Double> roundRobin(double totalData) {
         validateDistributionInput(totalData);
         return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = new HashMap<>();
-            double dataPerServer = totalData / servers.size();
-            for (Server server : servers) {
-                dist.put(server.getServerId(), dataPerServer);
-                currentDistribution.merge(server.getServerId(), dataPerServer, Double::sum);
+            Map<String, Double> dist = LoadDistributionPlanner.roundRobin(servers, totalData);
+            for (Map.Entry<String, Double> entry : dist.entrySet()) {
+                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
             return dist;
         });
