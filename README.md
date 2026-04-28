@@ -1,5 +1,21 @@
 # LoadBalancerPro
 
+## 🚀 What This Does
+
+LoadBalancerPro is a backend service that:
+
+- Distributes load across servers using multiple strategies
+- Enforces strict capacity limits (no over-allocation)
+- Detects overload conditions in real time
+- Reports unallocated load when demand exceeds capacity
+- Recommends how many additional servers are needed
+
+It includes:
+
+- CLI demo for quick simulation
+- Spring Boot REST API for integration
+- Fully tested allocation engine (100+ tests)
+
 LoadBalancerPro is a Java load balancing project with:
 
 - Core allocation strategies and server health models
@@ -52,48 +68,29 @@ POST /api/allocate/capacity-aware
 POST /api/allocate/predictive
 ```
 
-Example request:
+## Example Output
 
-```bash
-curl -X POST http://localhost:8080/api/allocate/capacity-aware \
-  -H "Content-Type: application/json" \
-  -d '{
-    "requestedLoad": 75.0,
-    "servers": [
-      {
-        "id": "api-1",
-        "cpuUsage": 90.0,
-        "memoryUsage": 90.0,
-        "diskUsage": 90.0,
-        "capacity": 100.0,
-        "weight": 1.0,
-        "healthy": true
-      },
-      {
-        "id": "worker-1",
-        "cpuUsage": 80.0,
-        "memoryUsage": 80.0,
-        "diskUsage": 80.0,
-        "capacity": 100.0,
-        "weight": 1.0,
-        "healthy": true
-      }
-    ]
-  }'
+Request:
+
+```text
+Total Load: 120
+Servers: 2 x capacity 50
 ```
 
-Example response:
+Result:
 
-```json
-{
-  "allocations": {
-    "api-1": 10.0,
-    "worker-1": 20.0
-  },
-  "unallocatedLoad": 45.0,
-  "recommendedAdditionalServers": 1
-}
+```text
+Allocation:
+S1: 50
+S2: 50
+
+Unallocated Load: 20
+Recommended Additional Servers: 1
 ```
+
+## 💰 Why This Matters
+
+Many load balancers can spread traffic, but unsafe allocation can hide overload by assigning more work than servers can actually handle. LoadBalancerPro keeps the math honest: it caps allocation at capacity, exposes unmet demand, and turns overload into an actionable scaling recommendation without mutating cloud infrastructure.
 
 ## Safety Notes
 
