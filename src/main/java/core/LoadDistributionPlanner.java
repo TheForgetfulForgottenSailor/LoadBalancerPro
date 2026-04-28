@@ -44,4 +44,28 @@ final class LoadDistributionPlanner {
         }
         return distribution;
     }
+
+    static Map<String, Double> capacityAware(List<Server> healthyServers, double totalData) {
+        Map<String, Double> distribution = new HashMap<>();
+        List<Server> sorted = healthyServers.stream()
+                .sorted(Comparator.comparingDouble(s -> s.getLoadScore() / s.getCapacity()))
+                .toList();
+        double totalCapacity = sorted.stream()
+                .mapToDouble(s -> s.getCapacity() - s.getLoadScore())
+                .sum();
+        double remaining = totalData;
+        for (Server server : sorted) {
+            double availableCapacity = server.getCapacity() - server.getLoadScore();
+            if (availableCapacity <= 0) {
+                continue;
+            }
+            double allocation = Math.min(remaining, (availableCapacity / totalCapacity) * totalData);
+            distribution.put(server.getServerId(), allocation);
+            remaining -= allocation;
+            if (remaining <= 0) {
+                break;
+            }
+        }
+        return distribution;
+    }
 }

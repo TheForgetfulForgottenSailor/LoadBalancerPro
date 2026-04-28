@@ -277,36 +277,12 @@ public class LoadBalancer {
     public Map<String, Double> capacityAware(double totalData) {
         validateDistributionInput(totalData);
         return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = new HashMap<>();
-            List<Server> sorted = sortByCapacityRatio(servers);
-            double totalCap = calculateTotalCapacity(sorted);
-            applyCapacityDistribution(dist, sorted, totalCap, totalData);
+            Map<String, Double> dist = LoadDistributionPlanner.capacityAware(servers, totalData);
+            for (Map.Entry<String, Double> entry : dist.entrySet()) {
+                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
+            }
             return dist;
         });
-    }
-
-    private List<Server> sortByCapacityRatio(List<Server> servers) {
-        return servers.stream()
-            .sorted(Comparator.comparingDouble(s -> s.getLoadScore() / s.getCapacity()))
-            .toList();
-    }
-
-    private double calculateTotalCapacity(List<Server> servers) {
-        return servers.stream().mapToDouble(s -> s.getCapacity() - s.getLoadScore()).sum();
-    }
-
-    private void applyCapacityDistribution(Map<String, Double> dist, List<Server> servers, 
-                                           double totalCap, double totalData) {
-        double remaining = totalData;
-        for (Server server : servers) {
-            double avail = server.getCapacity() - server.getLoadScore();
-            if (avail <= 0) continue;
-            double alloc = Math.min(remaining, (avail / totalCap) * totalData);
-            dist.put(server.getServerId(), alloc);
-            currentDistribution.merge(server.getServerId(), alloc, Double::sum);
-            remaining -= alloc;
-            if (remaining <= 0) break;
-        }
     }
 
     public Map<String, Double> predictiveLoadBalancing(double totalData) {
