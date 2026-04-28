@@ -8,7 +8,11 @@ import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.model.CreateTagsRequest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -24,6 +28,8 @@ import static org.mockito.Mockito.verify;
 class CloudManagerGuardrailTest {
     private static final String ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE";
     private static final String SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+    @TempDir
+    Path tempDir;
 
     @Test
     void dryRunWithInjectedClientsDoesNotMutateAws() throws Exception {
@@ -101,6 +107,89 @@ class CloudManagerGuardrailTest {
     }
 
     @Test
+    void auditLogsLiveScaleDeniedWhenLiveMutationIsDisabled() throws Exception {
+        String auditLog = auditLogForScale(1,
+                CloudConfig.ALLOW_LIVE_MUTATION_PROPERTY, "false",
+                CloudConfig.OPERATOR_INTENT_PROPERTY, "LOADBALANCERPRO_LIVE_MUTATION",
+                CloudConfig.MAX_DESIRED_CAPACITY_PROPERTY, "10",
+                CloudConfig.MAX_SCALE_STEP_PROPERTY, "10");
+
+        assertTrue(auditLog.contains("AUDIT cloud.scale.decision"));
+        assertTrue(auditLog.contains("decision=DENY"));
+        assertTrue(auditLog.contains("reason=ALLOW_LIVE_MUTATION_DISABLED"));
+    }
+
+    @Test
+    void auditLogsLiveScaleDeniedWhenOperatorIntentIsInvalid() throws Exception {
+        String auditLog = auditLogForScale(1,
+                CloudConfig.ALLOW_LIVE_MUTATION_PROPERTY, "true",
+                CloudConfig.OPERATOR_INTENT_PROPERTY, "wrong-intent",
+                CloudConfig.MAX_DESIRED_CAPACITY_PROPERTY, "10",
+                CloudConfig.MAX_SCALE_STEP_PROPERTY, "10");
+
+        assertTrue(auditLog.contains("AUDIT cloud.scale.decision"));
+        assertTrue(auditLog.contains("decision=DENY"));
+        assertTrue(auditLog.contains("reason=OPERATOR_INTENT_INVALID"));
+    }
+
+    @Test
+    void auditLogsLiveScaleDeniedWhenDesiredCapacityExceedsMax() throws Exception {
+        String auditLog = auditLogForScale(3,
+                CloudConfig.ALLOW_LIVE_MUTATION_PROPERTY, "true",
+                CloudConfig.OPERATOR_INTENT_PROPERTY, "LOADBALANCERPRO_LIVE_MUTATION",
+                CloudConfig.MAX_DESIRED_CAPACITY_PROPERTY, "2",
+                CloudConfig.MAX_SCALE_STEP_PROPERTY, "10");
+
+        assertTrue(auditLog.contains("AUDIT cloud.scale.decision"));
+        assertTrue(auditLog.contains("decision=DENY"));
+        assertTrue(auditLog.contains("desiredCapacity=3"));
+        assertTrue(auditLog.contains("maxDesiredCapacity=2"));
+        assertTrue(auditLog.contains("reason=MAX_DESIRED_CAPACITY_EXCEEDED"));
+    }
+
+    @Test
+    void auditLogsLiveScaleDeniedWhenScaleStepExceedsMax() throws Exception {
+        String auditLog = auditLogForScale(3,
+                CloudConfig.ALLOW_LIVE_MUTATION_PROPERTY, "true",
+                CloudConfig.OPERATOR_INTENT_PROPERTY, "LOADBALANCERPRO_LIVE_MUTATION",
+                CloudConfig.MAX_DESIRED_CAPACITY_PROPERTY, "10",
+                CloudConfig.MAX_SCALE_STEP_PROPERTY, "1");
+
+        assertTrue(auditLog.contains("AUDIT cloud.scale.decision"));
+        assertTrue(auditLog.contains("decision=DENY"));
+        assertTrue(auditLog.contains("scaleStep=3"));
+        assertTrue(auditLog.contains("maxScaleStep=1"));
+        assertTrue(auditLog.contains("reason=MAX_SCALE_STEP_EXCEEDED"));
+    }
+
+    @Test
+    void auditLogsLiveScaleAllowedWithinGuardrails() throws Exception {
+        String auditLog = auditLogForScale(2,
+                CloudConfig.ALLOW_LIVE_MUTATION_PROPERTY, "true",
+                CloudConfig.OPERATOR_INTENT_PROPERTY, "LOADBALANCERPRO_LIVE_MUTATION",
+                CloudConfig.MAX_DESIRED_CAPACITY_PROPERTY, "10",
+                CloudConfig.MAX_SCALE_STEP_PROPERTY, "2");
+
+        assertTrue(auditLog.contains("AUDIT cloud.scale.decision"));
+        assertTrue(auditLog.contains("decision=ALLOW"));
+        assertTrue(auditLog.contains("desiredCapacity=2"));
+        assertTrue(auditLog.contains("scaleStep=2"));
+        assertTrue(auditLog.contains("reason=GUARDRAILS_PASSED"));
+    }
+
+    @Test
+    void auditLogDoesNotExposeAwsCredentials() throws Exception {
+        String auditLog = auditLogForScale(1,
+                CloudConfig.ALLOW_LIVE_MUTATION_PROPERTY, "false",
+                CloudConfig.OPERATOR_INTENT_PROPERTY, "LOADBALANCERPRO_LIVE_MUTATION",
+                CloudConfig.MAX_DESIRED_CAPACITY_PROPERTY, "10",
+                CloudConfig.MAX_SCALE_STEP_PROPERTY, "10");
+
+        assertFalse(auditLog.contains(ACCESS_KEY));
+        assertFalse(auditLog.contains(SECRET_KEY));
+    }
+
+    @Test
     void deletionRequiresLiveModeOwnershipAndDeletionApproval() {
         assertDeletionSkipped(configWithDeletionFlags(false, true, true));
         assertDeletionSkipped(configWithDeletionFlags(true, false, true));
@@ -152,6 +241,24 @@ class CloudManagerGuardrailTest {
             props.setProperty(keyValues[i], keyValues[i + 1]);
         }
         return new CloudConfig(ACCESS_KEY, SECRET_KEY, "us-east-1", "lt-test", "subnet-test", props);
+    }
+
+    private String auditLogForScale(int desiredCapacity, String... keyValues)
+            throws InterruptedException, IOException {
+        Path logFile = tempDir.resolve("cloud-manager-" + System.nanoTime() + ".log");
+        Properties props = new Properties();
+        props.setProperty(CloudConfig.LIVE_MODE_PROPERTY, "true");
+        props.setProperty("retryAttempts", "1");
+        props.setProperty("logFile", logFile.toString());
+        for (int i = 0; i < keyValues.length; i += 2) {
+            props.setProperty(keyValues[i], keyValues[i + 1]);
+        }
+        CloudConfig config = new CloudConfig(ACCESS_KEY, SECRET_KEY, "us-east-1", "lt-test", "subnet-test", props);
+        CloudManager manager = new CloudManager(new LoadBalancer(), config, null, null, mock(AmazonAutoScaling.class), null);
+
+        scaleAndWait(manager, desiredCapacity);
+
+        return Files.readString(logFile);
     }
 
     private static void scaleAndWait(CloudManager manager, int desiredCapacity) throws InterruptedException {

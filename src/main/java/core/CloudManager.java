@@ -648,30 +648,40 @@ public class CloudManager {
 
     private boolean canUpdateAutoScalingGroupCapacity(int desiredCapacity) {
         if (!config.isLiveMutationAllowed()) {
-            logZeroCopy("Denied live ASG scale update to %s: %s is not enabled.",
-                    desiredCapacity, CloudConfig.ALLOW_LIVE_MUTATION_PROPERTY);
+            auditScaleDecision("DENY", desiredCapacity, -1, -1, "ALLOW_LIVE_MUTATION_DISABLED");
             return false;
         }
         if (!REQUIRED_LIVE_MUTATION_INTENT.equals(config.getOperatorIntent())) {
-            logZeroCopy("Denied live ASG scale update to %s: %s is missing or incorrect.",
-                    desiredCapacity, CloudConfig.OPERATOR_INTENT_PROPERTY);
+            auditScaleDecision("DENY", desiredCapacity, -1, -1, "OPERATOR_INTENT_INVALID");
             return false;
         }
         if (desiredCapacity > config.getMaxDesiredCapacity()) {
-            logZeroCopy("Denied live ASG scale update to %s: exceeds %s=%s.",
-                    desiredCapacity, CloudConfig.MAX_DESIRED_CAPACITY_PROPERTY, config.getMaxDesiredCapacity());
+            auditScaleDecision("DENY", desiredCapacity, -1, -1, "MAX_DESIRED_CAPACITY_EXCEEDED");
             return false;
         }
 
         int currentCapacity = getCurrentCapacity();
         int scaleStep = Math.abs(desiredCapacity - currentCapacity);
         if (scaleStep > config.getMaxScaleStep()) {
-            logZeroCopy("Denied live ASG scale update from %s to %s: step %s exceeds %s=%s.",
-                    currentCapacity, desiredCapacity, scaleStep,
-                    CloudConfig.MAX_SCALE_STEP_PROPERTY, config.getMaxScaleStep());
+            auditScaleDecision("DENY", desiredCapacity, currentCapacity, scaleStep, "MAX_SCALE_STEP_EXCEEDED");
             return false;
         }
+        auditScaleDecision("ALLOW", desiredCapacity, currentCapacity, scaleStep, "GUARDRAILS_PASSED");
         return true;
+    }
+
+    private void auditScaleDecision(String decision, int desiredCapacity, int currentCapacity, int scaleStep,
+                                    String reason) {
+        logZeroCopy("AUDIT cloud.scale.decision decision=%s desiredCapacity=%s currentCapacity=%s scaleStep=%s "
+                        + "maxDesiredCapacity=%s maxScaleStep=%s asg=%s reason=%s",
+                decision,
+                desiredCapacity,
+                currentCapacity,
+                scaleStep,
+                config.getMaxDesiredCapacity(),
+                config.getMaxScaleStep(),
+                config.getAutoScalingGroupName(),
+                reason);
     }
 
     private boolean canDeleteCloudResources() {
