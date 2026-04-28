@@ -2,7 +2,9 @@ package cli;
 
 import core.CloudManager;
 import core.CloudConfig;
+import core.LoadDistributionResult;
 import core.LoadBalancer;
+import core.ScalingRecommendation;
 import core.Server;
 import core.ServerMonitor;
 import core.ServerType;
@@ -274,27 +276,28 @@ public class LoadBalancerCLI {
             int strategyChoice = console.promptForInt("Enter your choice: ", 1, 6, "Strategy");
             if (strategyChoice < 0) return;
 
-            Map<String, Double> dist = null;
+            LoadDistributionResult result = null;
             try {
                 switch (strategyChoice) {
-                    case 1: dist = balancer.roundRobin(data); break;
-                    case 2: dist = balancer.leastLoaded(data); break;
-                    case 3: dist = balancer.weightedDistribution(data); break;
+                    case 1: result = new LoadDistributionResult(balancer.roundRobin(data), 0.0); break;
+                    case 2: result = new LoadDistributionResult(balancer.leastLoaded(data), 0.0); break;
+                    case 3: result = new LoadDistributionResult(balancer.weightedDistribution(data), 0.0); break;
                     case 4:
                         int keys = console.promptForInt("Enter number of data keys: [1-infinity] ", 1, Integer.MAX_VALUE, "Number of keys");
                         if (keys < 0) return;
-                        dist = balancer.consistentHashing(data, keys);
+                        result = new LoadDistributionResult(balancer.consistentHashing(data, keys), 0.0);
                         break;
-                    case 5: dist = balancer.capacityAware(data); break;
-                    case 6: dist = balancer.predictiveLoadBalancing(data); break;
+                    case 5: result = balancer.capacityAwareWithResult(data); break;
+                    case 6: result = balancer.predictiveLoadBalancingWithResult(data); break;
                 }
-                if (dist == null || dist.isEmpty()) {
+                if (result == null || (result.allocations().isEmpty() && result.unallocatedLoad() <= 0.0)) {
                     logger.warn("No distribution generated—no servers available?");
                     printError("No distribution—no servers available?");
                     return;
                 }
-                logger.info("Distribution: {}", dist);
-                displayLoadDistribution(dist);
+                logger.info("Distribution: {}, unallocatedLoad={}", result.allocations(), result.unallocatedLoad());
+                displayLoadDistribution(result.allocations());
+                displayDistributionSafetyInfo(result);
             } catch (Exception e) {
                 logger.error("Distribution failed: {}", e.getMessage(), e);
                 printError("Distribution failed: " + getRootCauseMessage(e));
@@ -325,6 +328,26 @@ public class LoadBalancerCLI {
                     System.out.println("Press Enter to see the next page...");
                     console.getScanner().nextLine();
                 }
+            }
+        }
+
+        private void displayDistributionSafetyInfo(LoadDistributionResult result) {
+            if (result.unallocatedLoad() <= 0.0) {
+                return;
+            }
+            double targetCapacity = averageHealthyServerCapacity();
+            ScalingRecommendation recommendation = balancer.recommendScaling(result.unallocatedLoad(), targetCapacity);
+            printSuccess(String.format("Unallocated Load: %.2f GB", result.unallocatedLoad()));
+            printSuccess(String.format("Recommended Additional Servers: %d", recommendation.additionalServers()));
+        }
+
+        private double averageHealthyServerCapacity() {
+            synchronized (balancer) {
+                return balancer.getServers().stream()
+                        .filter(Server::isHealthy)
+                        .mapToDouble(Server::getCapacity)
+                        .average()
+                        .orElse(0.0);
             }
         }
 

@@ -208,11 +208,9 @@ public class LoadBalancer {
     public Map<String, Double> roundRobin(double totalData) {
         validateDistributionInput(totalData);
         return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = new HashMap<>();
-            double dataPerServer = totalData / servers.size();
-            for (Server server : servers) {
-                dist.put(server.getServerId(), dataPerServer);
-                currentDistribution.merge(server.getServerId(), dataPerServer, Double::sum);
+            Map<String, Double> dist = LoadDistributionPlanner.roundRobin(servers, totalData);
+            for (Map.Entry<String, Double> entry : dist.entrySet()) {
+                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
             return dist;
         });
@@ -221,17 +219,9 @@ public class LoadBalancer {
     public Map<String, Double> leastLoaded(double totalData) {
         validateDistributionInput(totalData);
         return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = new HashMap<>();
-            List<Server> sorted = servers.stream()
-                .sorted(Comparator.comparingDouble(Server::getLoadScore))
-                .toList();
-            double remaining = totalData;
-            for (Server server : sorted) {
-                double alloc = Math.min(remaining, totalData / sorted.size());
-                dist.put(server.getServerId(), alloc);
-                currentDistribution.merge(server.getServerId(), alloc, Double::sum);
-                remaining -= alloc;
-                if (remaining <= 0) break;
+            Map<String, Double> dist = LoadDistributionPlanner.leastLoaded(servers, totalData);
+            for (Map.Entry<String, Double> entry : dist.entrySet()) {
+                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
             return dist;
         });
@@ -240,12 +230,9 @@ public class LoadBalancer {
     public Map<String, Double> weightedDistribution(double totalData) {
         validateDistributionInput(totalData);
         return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = new HashMap<>();
-            double totalWeight = servers.stream().mapToDouble(Server::getWeight).sum();
-            for (Server server : servers) {
-                double alloc = (server.getWeight() / totalWeight) * totalData;
-                dist.put(server.getServerId(), alloc);
-                currentDistribution.merge(server.getServerId(), alloc, Double::sum);
+            Map<String, Double> dist = LoadDistributionPlanner.weighted(servers, totalData);
+            for (Map.Entry<String, Double> entry : dist.entrySet()) {
+                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
             return dist;
         });
@@ -288,60 +275,38 @@ public class LoadBalancer {
     }
 
     public Map<String, Double> capacityAware(double totalData) {
+        return capacityAwareWithResult(totalData).allocations();
+    }
+
+    public LoadDistributionResult capacityAwareWithResult(double totalData) {
         validateDistributionInput(totalData);
-        return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = new HashMap<>();
-            List<Server> sorted = sortByCapacityRatio(servers);
-            double totalCap = calculateTotalCapacity(sorted);
-            applyCapacityDistribution(dist, sorted, totalCap, totalData);
-            return dist;
+        return distributeWithHealthyServersResult(totalData, servers -> {
+            LoadDistributionResult result = LoadDistributionPlanner.capacityAwareResult(servers, totalData);
+            for (Map.Entry<String, Double> entry : result.allocations().entrySet()) {
+                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
+            }
+            return result;
         });
-    }
-
-    private List<Server> sortByCapacityRatio(List<Server> servers) {
-        return servers.stream()
-            .sorted(Comparator.comparingDouble(s -> s.getLoadScore() / s.getCapacity()))
-            .toList();
-    }
-
-    private double calculateTotalCapacity(List<Server> servers) {
-        return servers.stream().mapToDouble(s -> s.getCapacity() - s.getLoadScore()).sum();
-    }
-
-    private void applyCapacityDistribution(Map<String, Double> dist, List<Server> servers, 
-                                           double totalCap, double totalData) {
-        double remaining = totalData;
-        for (Server server : servers) {
-            double avail = server.getCapacity() - server.getLoadScore();
-            if (avail <= 0) continue;
-            double alloc = Math.min(remaining, (avail / totalCap) * totalData);
-            dist.put(server.getServerId(), alloc);
-            currentDistribution.merge(server.getServerId(), alloc, Double::sum);
-            remaining -= alloc;
-            if (remaining <= 0) break;
-        }
     }
 
     public Map<String, Double> predictiveLoadBalancing(double totalData) {
+        return predictiveLoadBalancingWithResult(totalData).allocations();
+    }
+
+    public LoadDistributionResult predictiveLoadBalancingWithResult(double totalData) {
         validateDistributionInput(totalData);
-        return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = new HashMap<>();
-            Map<String, Double> predicted = calculatePredictedLoads(servers);
-            double totalPredCap = servers.stream()
-                .mapToDouble(s -> Math.max(0, s.getCapacity() - predicted.get(s.getServerId())))
-                .sum();
-            double remaining = totalData;
-            for (Server server : servers) {
-                double avail = Math.max(0, server.getCapacity() - predicted.get(server.getServerId()));
-                if (avail <= 0) continue;
-                double alloc = Math.min(remaining, (avail / totalPredCap) * totalData);
-                dist.put(server.getServerId(), alloc);
-                currentDistribution.merge(server.getServerId(), alloc, Double::sum);
-                remaining -= alloc;
-                if (remaining <= 0) break;
+        return distributeWithHealthyServersResult(totalData, servers -> {
+            LoadDistributionResult result = LoadDistributionPlanner.predictiveResult(
+                servers, totalData, calculatePredictedLoads(servers));
+            for (Map.Entry<String, Double> entry : result.allocations().entrySet()) {
+                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
-            return dist;
+            return result;
         });
+    }
+
+    public ScalingRecommendation recommendScaling(double unallocatedLoad, double targetCapacityPerServer) {
+        return ScalingRecommendation.forUnallocatedLoad(unallocatedLoad, targetCapacityPerServer);
     }
 
     private Map<String, Double> calculatePredictedLoads(List<Server> servers) {
@@ -570,6 +535,25 @@ public class LoadBalancer {
             if (healthy.isEmpty()) {
                 logger.warn("No healthy servers available for distribution.");
                 return Collections.emptyMap();
+            }
+            return distributor.apply(healthy);
+        } finally {
+            serverLock.readLock().unlock();
+        }
+    }
+
+    private LoadDistributionResult distributeWithHealthyServersResult(
+            double totalData, Function<List<Server>, LoadDistributionResult> distributor) {
+        serverLock.readLock().lock();
+        try {
+            if (servers.isEmpty()) {
+                logger.info("No servers available.");
+                return new LoadDistributionResult(Collections.emptyMap(), totalData);
+            }
+            List<Server> healthy = getHealthyServers();
+            if (healthy.isEmpty()) {
+                logger.warn("No healthy servers available for distribution.");
+                return new LoadDistributionResult(Collections.emptyMap(), totalData);
             }
             return distributor.apply(healthy);
         } finally {
