@@ -1,12 +1,17 @@
 package core;
 
 import com.amazonaws.services.autoscaling.AmazonAutoScaling;
+import com.amazonaws.services.autoscaling.model.AutoScalingGroup;
 import com.amazonaws.services.autoscaling.model.DeleteAutoScalingGroupRequest;
+import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsRequest;
+import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsResult;
+import com.amazonaws.services.autoscaling.model.TagDescription;
 import com.amazonaws.services.autoscaling.model.UpdateAutoScalingGroupRequest;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.model.CreateTagsRequest;
+import com.amazonaws.AmazonServiceException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -22,10 +27,12 @@ import java.util.function.Consumer;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.when;
 
 class CloudManagerGuardrailTest {
     private static final String ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE";
@@ -244,9 +251,12 @@ class CloudManagerGuardrailTest {
     @Test
     void deletionRunsOnlyWhenAllDeletionGatesAreExplicitlyEnabled() {
         AmazonAutoScaling autoScaling = mock(AmazonAutoScaling.class);
+        CloudConfig config = configWithDeletionFlags(true, true, true);
+        when(autoScaling.describeAutoScalingGroups(any(DescribeAutoScalingGroupsRequest.class)))
+                .thenReturn(asgDescribeResult(config, config.getAutoScalingGroupName()));
         CloudManager manager = new CloudManager(
                 new LoadBalancer(),
-                configWithDeletionFlags(true, true, true),
+                config,
                 null,
                 null,
                 autoScaling,
@@ -255,6 +265,49 @@ class CloudManagerGuardrailTest {
         manager.shutdown();
 
         verify(autoScaling).deleteAutoScalingGroup(any(DeleteAutoScalingGroupRequest.class));
+    }
+
+    @Test
+    void deletionWithoutMatchingOwnershipTagDoesNotDelete() {
+        AmazonAutoScaling autoScaling = mock(AmazonAutoScaling.class);
+        CloudConfig config = configWithDeletionFlags(true, true, true);
+        when(autoScaling.describeAutoScalingGroups(any(DescribeAutoScalingGroupsRequest.class)))
+                .thenReturn(asgDescribeResult(config, "another-owner"));
+        CloudManager manager = new CloudManager(new LoadBalancer(), config, null, null, autoScaling, null);
+
+        manager.shutdown();
+
+        verify(autoScaling).describeAutoScalingGroups(any(DescribeAutoScalingGroupsRequest.class));
+        verify(autoScaling, never()).deleteAutoScalingGroup(any(DeleteAutoScalingGroupRequest.class));
+    }
+
+    @Test
+    void deletionWithMatchingOwnershipTagAndAllGatesDeletes() {
+        AmazonAutoScaling autoScaling = mock(AmazonAutoScaling.class);
+        CloudConfig config = configWithDeletionFlags(true, true, true);
+        when(autoScaling.describeAutoScalingGroups(any(DescribeAutoScalingGroupsRequest.class)))
+                .thenReturn(asgDescribeResult(config, config.getAutoScalingGroupName()));
+        CloudManager manager = new CloudManager(new LoadBalancer(), config, null, null, autoScaling, null);
+
+        manager.shutdown();
+
+        verify(autoScaling).describeAutoScalingGroups(argThat(request ->
+                request.getAutoScalingGroupNames().contains(config.getAutoScalingGroupName())));
+        verify(autoScaling).deleteAutoScalingGroup(any(DeleteAutoScalingGroupRequest.class));
+    }
+
+    @Test
+    void deletionDescribeFailureDoesNotDelete() {
+        AmazonAutoScaling autoScaling = mock(AmazonAutoScaling.class);
+        CloudConfig config = configWithDeletionFlags(true, true, true);
+        when(autoScaling.describeAutoScalingGroups(any(DescribeAutoScalingGroupsRequest.class)))
+                .thenThrow(new AmazonServiceException("describe failed"));
+        CloudManager manager = new CloudManager(new LoadBalancer(), config, null, null, autoScaling, null);
+
+        manager.shutdown();
+
+        verify(autoScaling).describeAutoScalingGroups(any(DescribeAutoScalingGroupsRequest.class));
+        verify(autoScaling, never()).deleteAutoScalingGroup(any(DeleteAutoScalingGroupRequest.class));
     }
 
     private static void assertDeletionSkipped(CloudConfig config) {
@@ -274,6 +327,15 @@ class CloudManagerGuardrailTest {
         props.setProperty(CloudConfig.ALLOW_RESOURCE_DELETION_PROPERTY, Boolean.toString(deletionAllowed));
         props.setProperty("retryAttempts", "1");
         return new CloudConfig(ACCESS_KEY, SECRET_KEY, "us-east-1", "lt-test", "subnet-test", props);
+    }
+
+    private static DescribeAutoScalingGroupsResult asgDescribeResult(CloudConfig config, String ownerValue) {
+        AutoScalingGroup asg = new AutoScalingGroup()
+                .withAutoScalingGroupName(config.getAutoScalingGroupName())
+                .withTags(new TagDescription()
+                        .withKey("LoadBalancerPro")
+                        .withValue(ownerValue));
+        return new DescribeAutoScalingGroupsResult().withAutoScalingGroups(asg);
     }
 
     private static CloudConfig liveConfigWithMutationGuardrails(String... keyValues) {

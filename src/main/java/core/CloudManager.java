@@ -705,10 +705,32 @@ public class CloudManager {
     }
 
     private boolean canDeleteCloudResources() {
-        return config.isLiveMode()
-                && config.isResourceOwnershipConfirmed()
-                && config.isResourceDeletionAllowed()
-                && autoScalingClient != null;
+        if (!config.isLiveMode()
+                || !config.isResourceOwnershipConfirmed()
+                || !config.isResourceDeletionAllowed()
+                || autoScalingClient == null) {
+            return false;
+        }
+
+        DescribeAutoScalingGroupsResult result = executeWithRetry(() ->
+                autoScalingClient.describeAutoScalingGroups(
+                        new DescribeAutoScalingGroupsRequest()
+                                .withAutoScalingGroupNames(config.getAutoScalingGroupName())),
+                "validate ASG ownership before deletion", null);
+        if (result == null || result.getAutoScalingGroups().isEmpty()) {
+            logZeroCopy("Denied cloud resource deletion. No ASG found for {}", config.getAutoScalingGroupName());
+            return false;
+        }
+
+        return result.getAutoScalingGroups().stream()
+                .filter(asg -> config.getAutoScalingGroupName().equals(asg.getAutoScalingGroupName()))
+                .anyMatch(this::hasDeletionOwnershipTag);
+    }
+
+    private boolean hasDeletionOwnershipTag(AutoScalingGroup asg) {
+        return asg.getTags() != null && asg.getTags().stream()
+                .anyMatch(tag -> "LoadBalancerPro".equals(tag.getKey())
+                        && config.getAutoScalingGroupName().equals(tag.getValue()));
     }
 
     private static class MetricCacheEntry {
