@@ -288,20 +288,10 @@ public class LoadBalancer {
     public Map<String, Double> predictiveLoadBalancing(double totalData) {
         validateDistributionInput(totalData);
         return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = new HashMap<>();
-            Map<String, Double> predicted = calculatePredictedLoads(servers);
-            double totalPredCap = servers.stream()
-                .mapToDouble(s -> Math.max(0, s.getCapacity() - predicted.get(s.getServerId())))
-                .sum();
-            double remaining = totalData;
-            for (Server server : servers) {
-                double avail = Math.max(0, server.getCapacity() - predicted.get(server.getServerId()));
-                if (avail <= 0) continue;
-                double alloc = Math.min(remaining, (avail / totalPredCap) * totalData);
-                dist.put(server.getServerId(), alloc);
-                currentDistribution.merge(server.getServerId(), alloc, Double::sum);
-                remaining -= alloc;
-                if (remaining <= 0) break;
+            Map<String, Double> dist = LoadDistributionPlanner.predictive(
+                servers, totalData, calculatePredictedLoads(servers));
+            for (Map.Entry<String, Double> entry : dist.entrySet()) {
+                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
             return dist;
         });

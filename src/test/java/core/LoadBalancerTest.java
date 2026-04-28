@@ -419,7 +419,7 @@ class LoadBalancerTest {
 
             assertEquals(61.54, baselineResult.get("S1"), 0.01, "Baseline factor should favor lower predicted load!");
             assertEquals(38.46, baselineResult.get("S2"), 0.01, "Baseline factor should still allocate to S2!");
-            assertEquals(100.0, aggressiveResult.get("S1"), 0.01, "Higher factor should send all load to S1!");
+            assertEquals(60.0, aggressiveResult.get("S1"), 0.01, "Higher factor should cap S1 at predicted capacity!");
             assertFalse(aggressiveResult.containsKey("S2"), "S2 has no predicted spare capacity at factor 2.0!");
         } finally {
             baseline.shutdown();
@@ -470,9 +470,9 @@ class LoadBalancerTest {
         logger.info("=== TESTING PREDICTIVE DISTRIBUTION SINGLE SERVER ===");
         addServers(serverWithWeightAndCapacity("ONLY", 70.0, 70.0, 70.0, 1.0, 100.0));
 
-        Map<String, Double> result = balancer.predictiveLoadBalancing(75.0);
+        Map<String, Double> result = balancer.predictiveLoadBalancing(20.0);
 
-        assertEquals(75.0, result.get("ONLY"), 0.01, "Single healthy server should receive full allocation!");
+        assertEquals(20.0, result.get("ONLY"), 0.01, "Single healthy server should receive requested allocation within predicted capacity!");
         assertEquals(1, result.size(), "Only one server should be allocated!");
     }
 
@@ -486,7 +486,7 @@ class LoadBalancerTest {
     }
 
     @Test
-    void testPredictiveDistributionSkipsExhaustedPredictedCapacityAndPreservesOverflow() {
+    void testPredictiveDistributionSkipsExhaustedPredictedCapacityAndCapsOverflow() {
         logger.info("=== TESTING PREDICTIVE DISTRIBUTION EXHAUSTED CAPACITY ===");
         LoadBalancer aggressive = new LoadBalancer(100.0, 10, 2.0);
         try {
@@ -496,10 +496,37 @@ class LoadBalancerTest {
             Map<String, Double> result = aggressive.predictiveLoadBalancing(150.0);
 
             assertFalse(result.containsKey("EXHAUSTED"), "Server with no predicted spare capacity should receive no allocation!");
-            assertEquals(150.0, result.get("AVAILABLE"), 0.01,
-                "Current predictive behavior can allocate beyond predicted available capacity!");
+            assertEquals(60.0, result.get("AVAILABLE"), 0.01,
+                "AVAILABLE should not receive more than predicted available capacity!");
+            assertEquals(60.0, result.values().stream().mapToDouble(Double::doubleValue).sum(), 0.01,
+                "Excess requested load should remain unallocated!");
         } finally {
             aggressive.shutdown();
+        }
+    }
+
+    @Test
+    void testPredictiveDistributionIsDeterministicForEqualPredictedCapacity() {
+        logger.info("=== TESTING PREDICTIVE DISTRIBUTION DETERMINISTIC TIE ORDER ===");
+        LoadBalancer first = new LoadBalancer();
+        LoadBalancer second = new LoadBalancer();
+        try {
+            first.addServer(serverWithWeightAndCapacity("B", 25.0, 25.0, 25.0, 1.0, 100.0));
+            first.addServer(serverWithWeightAndCapacity("A", 25.0, 25.0, 25.0, 1.0, 100.0));
+            second.addServer(serverWithWeightAndCapacity("A", 25.0, 25.0, 25.0, 1.0, 100.0));
+            second.addServer(serverWithWeightAndCapacity("B", 25.0, 25.0, 25.0, 1.0, 100.0));
+
+            Map<String, Double> firstResult = first.predictiveLoadBalancing(80.0);
+            Map<String, Double> secondResult = second.predictiveLoadBalancing(80.0);
+
+            assertEquals(firstResult, secondResult, "Predictive allocation should not depend on insertion order!");
+            assertIterableEquals(List.of("A", "B"), firstResult.keySet(),
+                "Equal predicted capacity should use server ID order for deterministic output!");
+            assertEquals(40.0, firstResult.get("A"), 0.01, "A should receive half the request!");
+            assertEquals(40.0, firstResult.get("B"), 0.01, "B should receive half the request!");
+        } finally {
+            first.shutdown();
+            second.shutdown();
         }
     }
 

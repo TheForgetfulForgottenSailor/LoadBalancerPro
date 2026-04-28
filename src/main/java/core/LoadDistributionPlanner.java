@@ -73,7 +73,36 @@ final class LoadDistributionPlanner {
         return distribution;
     }
 
+    static Map<String, Double> predictive(List<Server> healthyServers, double totalData,
+                                          Map<String, Double> predictedLoads) {
+        Map<String, Double> distribution = new LinkedHashMap<>();
+        List<Server> sorted = healthyServers.stream()
+                .filter(s -> predictedAvailableCapacity(s, predictedLoads) > 0)
+                .sorted(Comparator.comparingDouble((Server s) -> -predictedAvailableCapacity(s, predictedLoads))
+                        .thenComparing(Server::getServerId))
+                .toList();
+        double totalPredictedCapacity = sorted.stream()
+                .mapToDouble(s -> predictedAvailableCapacity(s, predictedLoads))
+                .sum();
+        double remaining = totalData;
+        for (Server server : sorted) {
+            double availableCapacity = predictedAvailableCapacity(server, predictedLoads);
+            double proportionalAllocation = (availableCapacity / totalPredictedCapacity) * totalData;
+            double allocation = Math.min(Math.min(remaining, proportionalAllocation), availableCapacity);
+            distribution.put(server.getServerId(), allocation);
+            remaining -= allocation;
+            if (remaining <= 0) {
+                break;
+            }
+        }
+        return distribution;
+    }
+
     private static double availableCapacity(Server server) {
         return server.getCapacity() - server.getLoadScore();
+    }
+
+    private static double predictedAvailableCapacity(Server server, Map<String, Double> predictedLoads) {
+        return Math.max(0, server.getCapacity() - predictedLoads.get(server.getServerId()));
     }
 }
