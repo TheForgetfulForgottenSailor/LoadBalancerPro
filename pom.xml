@@ -12,6 +12,7 @@
         <java.version>17</java.version>
         <spring-boot.version>3.2.5</spring-boot.version>
         <aws-sdk.version>1.12.777</aws-sdk.version>
+        <javafx.version>17.0.10</javafx.version>
     </properties>
 
     <!-- Let Spring Boot manage dependency versions -->
@@ -49,6 +50,13 @@
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
+        <!-- JavaFX GUI -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
         </dependency>
 
         <dependency>

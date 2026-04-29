@@ -55,6 +55,17 @@ public class LoadBalancerGUI extends Application {
     private static final String NO_ALERTS_MESSAGE = "No alerts available.";
     private static final String NO_DISTRIBUTION_MESSAGE = "No distribution data available.";
     private static final String COMMAND_HISTORY_FILE = "command_history.json";
+    private static final String AWS_ACCESS_KEY_PROPERTY = "aws.accessKeyId";
+    private static final String AWS_SECRET_KEY_PROPERTY = "aws.secretAccessKey";
+    private static final String AWS_REGION_PROPERTY = "aws.region";
+    private static final String LAUNCH_TEMPLATE_PROPERTY = "cloud.launchTemplateId";
+    private static final String SUBNET_ID_PROPERTY = "cloud.subnetId";
+    private static final String AWS_ACCESS_KEY_ENV = "AWS_ACCESS_KEY_ID";
+    private static final String AWS_SECRET_KEY_ENV = "AWS_SECRET_ACCESS_KEY";
+    private static final String AWS_REGION_ENV = "AWS_REGION";
+    private static final String AWS_DEFAULT_REGION_ENV = "AWS_DEFAULT_REGION";
+    private static final String LAUNCH_TEMPLATE_ENV = "CLOUD_LAUNCH_TEMPLATE_ID";
+    private static final String SUBNET_ID_ENV = "CLOUD_SUBNET_ID";
     private static final Preferences prefs = Preferences.userNodeForPackage(LoadBalancerGUI.class);
 
     private LoadBalancer balancer;
@@ -87,22 +98,18 @@ public class LoadBalancerGUI extends Application {
 
     @Override
     public void start(Stage stage) {
-        logger.info("=== Starting LoadBalancerGUI ===");
+        logger.info("Starting LoadBalancerGUI.");
         config = GuiConfig.getInstance(getParameters().getRaw().toArray(new String[0]), this::handleConfigError);
         balancer = new LoadBalancer();
+        commandHistory = loadCommandHistory();
         if (config.isCloudEnabled()) {
-            cloudManager = new CloudManager(balancer, new CloudConfig("your-access-key", "your-secret-key", "us-west-2", 
-                                                                    "your-launch-template-id", "your-subnet-id"), 
-                                          commandHistory::add); // Replace with actual AWS credentials
-            logger.info("CloudManager initialized with min={} and max={} servers.", 
-                        config.getCloudMinServers(), config.getCloudMaxServers());
+            initializeCloudManager();
         } else {
             logger.info("Cloud integration disabled via GuiConfig.");
         }
         serverData = FXCollections.observableArrayList();
         allServerData = new ArrayList<>();
         serverRowMap = new HashMap<>();
-        commandHistory = loadCommandHistory();
         commandQueue = new LinkedBlockingQueue<>();
         allAlerts = new ArrayList<>();
         progressIndicator = new ProgressIndicator();
@@ -127,6 +134,106 @@ public class LoadBalancerGUI extends Application {
         if (config.hasLoadErrors()) {
             alert(ERROR_TITLE, "GUI configuration loaded with errors. Check logs for details.");
         }
+    }
+
+    private void initializeCloudManager() {
+        try {
+            Properties systemProperties = System.getProperties();
+            Map<String, String> environment = System.getenv();
+            Optional<String> accessKey = firstConfigured(systemProperties, environment,
+                    AWS_ACCESS_KEY_PROPERTY, AWS_ACCESS_KEY_ENV);
+            Optional<String> secretKey = firstConfigured(systemProperties, environment,
+                    AWS_SECRET_KEY_PROPERTY, AWS_SECRET_KEY_ENV);
+            Optional<String> region = firstConfigured(systemProperties, environment,
+                    AWS_REGION_PROPERTY, AWS_REGION_ENV, AWS_DEFAULT_REGION_ENV);
+            Optional<String> launchTemplateId = firstConfigured(systemProperties, environment,
+                    LAUNCH_TEMPLATE_PROPERTY, LAUNCH_TEMPLATE_ENV);
+            Optional<String> subnetId = firstConfigured(systemProperties, environment,
+                    SUBNET_ID_PROPERTY, SUBNET_ID_ENV);
+            boolean liveModeRequested = firstConfigured(systemProperties, environment,
+                    CloudConfig.LIVE_MODE_PROPERTY, "CLOUD_LIVE_MODE")
+                    .map(Boolean::parseBoolean)
+                    .orElse(false);
+
+            List<String> missing = new ArrayList<>();
+            if (accessKey.isEmpty()) missing.add(AWS_ACCESS_KEY_PROPERTY + "/" + AWS_ACCESS_KEY_ENV);
+            if (secretKey.isEmpty()) missing.add(AWS_SECRET_KEY_PROPERTY + "/" + AWS_SECRET_KEY_ENV);
+            if (region.isEmpty()) missing.add(AWS_REGION_PROPERTY + "/" + AWS_REGION_ENV + " or " + AWS_DEFAULT_REGION_ENV);
+            if (liveModeRequested && launchTemplateId.isEmpty()) missing.add(LAUNCH_TEMPLATE_PROPERTY + "/" + LAUNCH_TEMPLATE_ENV);
+            if (liveModeRequested && subnetId.isEmpty()) missing.add(SUBNET_ID_PROPERTY + "/" + SUBNET_ID_ENV);
+            if (!missing.isEmpty()) {
+                throw new IllegalArgumentException("missing required configuration: " + String.join(", ", missing));
+            }
+
+            Properties cloudProperties = new Properties();
+            copyCloudFlag(systemProperties, environment, cloudProperties, CloudConfig.LIVE_MODE_PROPERTY, "CLOUD_LIVE_MODE");
+            copyCloudFlag(systemProperties, environment, cloudProperties,
+                    CloudConfig.ALLOW_RESOURCE_DELETION_PROPERTY, "CLOUD_ALLOW_RESOURCE_DELETION");
+            copyCloudFlag(systemProperties, environment, cloudProperties,
+                    CloudConfig.CONFIRM_RESOURCE_OWNERSHIP_PROPERTY, "CLOUD_CONFIRM_RESOURCE_OWNERSHIP");
+            copyCloudFlag(systemProperties, environment, cloudProperties,
+                    CloudConfig.MAX_DESIRED_CAPACITY_PROPERTY, "CLOUD_MAX_DESIRED_CAPACITY");
+            copyCloudFlag(systemProperties, environment, cloudProperties,
+                    CloudConfig.MAX_SCALE_STEP_PROPERTY, "CLOUD_MAX_SCALE_STEP");
+            copyCloudFlag(systemProperties, environment, cloudProperties,
+                    CloudConfig.ALLOW_LIVE_MUTATION_PROPERTY, "CLOUD_ALLOW_LIVE_MUTATION");
+            copyCloudFlag(systemProperties, environment, cloudProperties,
+                    CloudConfig.OPERATOR_INTENT_PROPERTY, "CLOUD_OPERATOR_INTENT");
+            copyCloudFlag(systemProperties, environment, cloudProperties,
+                    CloudConfig.ALLOW_AUTONOMOUS_SCALE_UP_PROPERTY, "CLOUD_ALLOW_AUTONOMOUS_SCALE_UP");
+            copyCloudFlag(systemProperties, environment, cloudProperties,
+                    CloudConfig.ENVIRONMENT_PROPERTY, "CLOUD_ENVIRONMENT");
+            copyCloudFlag(systemProperties, environment, cloudProperties,
+                    CloudConfig.ALLOWED_AWS_ACCOUNT_IDS_PROPERTY, "CLOUD_ALLOWED_AWS_ACCOUNT_IDS");
+            copyCloudFlag(systemProperties, environment, cloudProperties,
+                    CloudConfig.CURRENT_AWS_ACCOUNT_ID_PROPERTY, "CLOUD_CURRENT_AWS_ACCOUNT_ID");
+            copyCloudFlag(systemProperties, environment, cloudProperties,
+                    CloudConfig.ALLOWED_REGIONS_PROPERTY, "CLOUD_ALLOWED_REGIONS");
+
+            CloudConfig cloudConfig = new CloudConfig(
+                    accessKey.orElseThrow(),
+                    secretKey.orElseThrow(),
+                    region.orElseThrow(),
+                    launchTemplateId.orElse(""),
+                    subnetId.orElse(""),
+                    cloudProperties);
+            cloudManager = new CloudManager(balancer, cloudConfig, commandHistory::add);
+            logger.info("CloudManager initialized in {} mode with min={} and max={} servers.",
+                    cloudConfig.isLiveMode() ? "live" : "dry-run",
+                    config.getCloudMinServers(),
+                    config.getCloudMaxServers());
+            if (cloudConfig.isLiveMode()) {
+                logger.warn("Live cloud mode is enabled because {}=true was provided.", CloudConfig.LIVE_MODE_PROPERTY);
+            }
+        } catch (IllegalArgumentException e) {
+            cloudManager = null;
+            logger.warn("Cloud integration requested but disabled: {}. No AWS calls will be made.", e.getMessage());
+        }
+    }
+
+    private static void copyCloudFlag(Properties systemProperties, Map<String, String> environment,
+                                      Properties target, String propertyName, String environmentName) {
+        firstConfigured(systemProperties, environment, propertyName, environmentName)
+                .ifPresent(value -> target.setProperty(propertyName, value));
+    }
+
+    private static Optional<String> firstConfigured(Properties systemProperties, Map<String, String> environment,
+                                                   String propertyName, String... environmentNames) {
+        String propertyValue = systemProperties.getProperty(propertyName);
+        if (isConfigured(propertyValue)) {
+            return Optional.of(propertyValue.trim());
+        }
+        for (String environmentName : environmentNames) {
+            String value = environment.get(environmentName);
+            if (isConfigured(value)) {
+                return Optional.of(value.trim());
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static boolean isConfigured(String value) {
+        return value != null && !value.isBlank();
     }
 
     private VBox setupLayout() {
@@ -154,7 +261,7 @@ public class LoadBalancerGUI extends Application {
 
         loadChart = createLoadChart();
         TabPane tabPane = createTabPane(statusPane, alertPane, historyPane);
-        HBox controls = createControls();
+        FlowPane controls = createControls();
 
         VBox root = new VBox(10, controls, progressIndicator, tabPane);
         root.setPadding(new Insets(10));
@@ -315,7 +422,7 @@ public class LoadBalancerGUI extends Application {
         return chart;
     }
 
-    private HBox createControls() {
+    private FlowPane createControls() {
         Button addServerButton = new Button("Add Server");
         Button importButton = new Button("Import Logs");
         Button balanceButton = new Button("Balance Load");
@@ -324,7 +431,7 @@ public class LoadBalancerGUI extends Application {
         Button healthButton = new Button("Check Health");
         Button failButton = new Button("Fail Server");
         undoButton = new Button("Undo");
-        Button initCloudButton = new Button("Init Cloud");
+        Button initCloudButton = new Button("Initialize Cloud");
         Button scaleCloudButton = new Button("Scale Cloud");
         updateToggleButton = new ToggleButton("Pause Updates");
         updateToggleButton.setSelected(false);
@@ -336,12 +443,12 @@ public class LoadBalancerGUI extends Application {
         themeToggleButton = new ToggleButton(isDarkMode ? "Light Mode" : "Dark Mode");
         themeToggleButton.setOnAction(e -> toggleTheme());
 
-        initCloudButton.setDisable(!config.isCloudEnabled());
-        scaleCloudButton.setDisable(!config.isCloudEnabled());
+        initCloudButton.setDisable(!config.isCloudEnabled() || cloudManager == null);
+        scaleCloudButton.setDisable(!config.isCloudEnabled() || cloudManager == null);
 
-        HBox controls = new HBox(10, addServerButton, importButton, balanceButton, reportButton,
-                                 statusButton, healthButton, failButton, undoButton, initCloudButton, scaleCloudButton,
-                                 updateToggleButton, themeToggleButton);
+        FlowPane controls = new FlowPane(10, 8, addServerButton, importButton, balanceButton, reportButton,
+                                         statusButton, healthButton, failButton, undoButton, initCloudButton,
+                                         scaleCloudButton, updateToggleButton, themeToggleButton);
 
         addServerButton.setOnAction(e -> queueCommand(new AddServerCommand(this, balancer)));
         importButton.setOnAction(e -> queueCommand(this::importLogs));

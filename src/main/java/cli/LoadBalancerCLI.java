@@ -822,8 +822,8 @@ public class LoadBalancerCLI {
 
         private void launchGUI(ConsoleUtils console) {
             try {
-                logger.info("Launching GUI...");
-                printSuccess("Launching GUI...");
+                logger.info("Launching GUI.");
+                printSuccess("Launching GUI.");
                 LoadBalancerGUI.launch(LoadBalancerGUI.class, config.getArgs());
                 shutdown(); // Exit CLI after launching GUI
             } catch (Exception e) {
