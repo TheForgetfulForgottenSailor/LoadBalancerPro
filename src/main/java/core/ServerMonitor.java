@@ -142,7 +142,6 @@ public class ServerMonitor implements Runnable {
         if (monitorThread != null) {
             monitorThread.interrupt();
         }
-        alertExecutor.shutdownNow();
         try {
             if (monitorThread != null) {
                 monitorThread.join(TimeUnit.SECONDS.toMillis(config.shutdownTimeoutSeconds));
@@ -150,6 +149,7 @@ public class ServerMonitor implements Runnable {
             if (monitorThread != null && monitorThread.isAlive()) {
                 logger.warn("Monitor thread did not terminate within {} seconds.", config.shutdownTimeoutSeconds);
             }
+            alertExecutor.shutdownNow();
             if (!alertExecutor.awaitTermination(config.shutdownTimeoutSeconds, TimeUnit.SECONDS)) {
                 logger.warn("Alert executor did not terminate within {} seconds.", config.shutdownTimeoutSeconds);
             }
@@ -377,13 +377,21 @@ public class ServerMonitor implements Runnable {
     }
 
     private void sendAlertAsync(String alertMsg) {
-        alertExecutor.submit(() -> {
-            try {
-                alertCallback.accept(alertMsg);
-            } catch (Exception e) {
-                logger.error("Async alert callback failed for message '{}': {}", alertMsg, e.getMessage(), e);
-            }
-        });
+        if (!running || alertExecutor.isShutdown()) {
+            logger.debug("Skipping async alert submission after monitor shutdown.");
+            return;
+        }
+        try {
+            alertExecutor.submit(() -> {
+                try {
+                    alertCallback.accept(alertMsg);
+                } catch (Exception e) {
+                    logger.error("Async alert callback failed for message '{}': {}", alertMsg, e.getMessage(), e);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            logger.debug("Skipping async alert submission because alert executor is shutting down.");
+        }
     }
 
     private boolean canSendAlert(Server server, long cooldownMs) {

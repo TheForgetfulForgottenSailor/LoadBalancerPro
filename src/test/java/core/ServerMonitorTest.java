@@ -130,6 +130,17 @@ class ServerMonitorTest {
         logger.debug("Waited for {} monitor cycles.", cycles);
     }
 
+    @Test
+    void asyncAlertSubmissionAfterStopIsIgnored() throws Exception {
+        monitor.stop();
+
+        java.lang.reflect.Method sendAlertAsync = ServerMonitor.class
+                .getDeclaredMethod("sendAlertAsync", String.class);
+        sendAlertAsync.setAccessible(true);
+
+        assertDoesNotThrow(() -> sendAlertAsync.invoke(monitor, "late alert after shutdown"));
+    }
+
     /**
      * Adds servers to the LoadBalancer.
      *
