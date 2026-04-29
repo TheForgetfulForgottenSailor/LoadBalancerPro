@@ -212,6 +212,7 @@ public class LoadBalancer {
             for (Map.Entry<String, Double> entry : dist.entrySet()) {
                 currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
+            DomainMetrics.recordAllocation("ROUND_ROBIN", servers.size(), 0.0);
             return dist;
         });
     }
@@ -223,6 +224,7 @@ public class LoadBalancer {
             for (Map.Entry<String, Double> entry : dist.entrySet()) {
                 currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
+            DomainMetrics.recordAllocation("LEAST_LOADED", servers.size(), 0.0);
             return dist;
         });
     }
@@ -234,6 +236,7 @@ public class LoadBalancer {
             for (Map.Entry<String, Double> entry : dist.entrySet()) {
                 currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
+            DomainMetrics.recordAllocation("WEIGHTED", servers.size(), 0.0);
             return dist;
         });
     }
@@ -271,6 +274,7 @@ public class LoadBalancer {
                 logger.warn("No healthy servers found for data key {}", i);
             }
         }
+        DomainMetrics.recordAllocation("CONSISTENT_HASHING", healthy.size(), 0.0);
         return dist;
     }
 
@@ -285,6 +289,7 @@ public class LoadBalancer {
             for (Map.Entry<String, Double> entry : result.allocations().entrySet()) {
                 currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
+            DomainMetrics.recordAllocation("CAPACITY_AWARE", servers.size(), result.unallocatedLoad());
             return result;
         });
     }
@@ -301,6 +306,7 @@ public class LoadBalancer {
             for (Map.Entry<String, Double> entry : result.allocations().entrySet()) {
                 currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
+            DomainMetrics.recordAllocation("PREDICTIVE", servers.size(), result.unallocatedLoad());
             return result;
         });
     }

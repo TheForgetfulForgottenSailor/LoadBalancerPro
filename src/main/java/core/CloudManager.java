@@ -428,6 +428,7 @@ public class CloudManager {
         @Override
         public void execute() {
             if (manager.config.isDryRun()) {
+                DomainMetrics.recordCloudScaleDecision("DRY_RUN", source, "DRY_RUN");
                 manager.logZeroCopy("Dry-run mode: skipped scaling Auto Scaling Group to {} servers", desiredCapacity);
                 status = Status.COMPLETED;
                 if (callback != null) callback.accept(true);
@@ -717,6 +718,7 @@ public class CloudManager {
 
     private void auditScaleDecision(String decision, int desiredCapacity, int currentCapacity, int scaleStep,
                                     CloudMutationSource source, String reason) {
+        DomainMetrics.recordCloudScaleDecision(decision, source, reason);
         logZeroCopy("AUDIT cloud.scale.decision decision=%s source=%s desiredCapacity=%s currentCapacity=%s scaleStep=%s "
                         + "maxDesiredCapacity=%s maxScaleStep=%s environment=%s accountId=%s region=%s asg=%s reason=%s",
                 decision,

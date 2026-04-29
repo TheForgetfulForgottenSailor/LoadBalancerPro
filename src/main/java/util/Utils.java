@@ -1,6 +1,7 @@
 package util;
 
 import core.LoadBalancer;
+import core.DomainMetrics;
 import core.Server;
 import core.ServerType;
 import org.apache.logging.log4j.LogManager;
@@ -177,6 +178,7 @@ public class Utils {
                 }
                 updateProgress(progressCount, totalLines, progressCallback);
             } catch (Exception e) {
+                DomainMetrics.recordCsvParseFailure();
                 diagnostics.recordSkipped();
                 logger.error("[{}] Line {}: Failed to parse CSV line '{}': {}", timestamp, lineNum, line, e.getMessage(), e);
             }
@@ -195,6 +197,7 @@ public class Utils {
         try {
             jsonArray = JsonServerLogParser.parseArray(jsonContent);
         } catch (RuntimeException e) {
+            DomainMetrics.recordJsonParseFailure();
             diagnostics.recordMalformedDocument();
             logger.info("[{}] Import failed: total={}, imported={}, skipped={}, malformedDocuments={}",
                     timestamp, diagnostics.getTotalSeen(), diagnostics.getImported(), diagnostics.getSkipped(),
@@ -248,6 +251,7 @@ public class Utils {
                 }
                 updateProgress(progressCount, totalLines, progressCallback);
             } catch (Exception e) {
+                DomainMetrics.recordJsonParseFailure();
                 diagnostics.recordSkipped();
                 logger.error("[{}] JSON entry {}: Failed to parse: {}", timestamp, i, e.getMessage(), e);
             }
