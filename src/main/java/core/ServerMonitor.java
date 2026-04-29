@@ -200,28 +200,28 @@ public class ServerMonitor implements Runnable {
             running = false;
             return;
         }
-        logger.info("=== SERVER MONITOR ONLINE—WATCHIN’ THE CREW ===");
+        logger.info("Server monitor run loop started.");
         while (running) {
             if (!paused) {
                 monitorServers();
                 AggregatedMetrics agg = getAggregatedMetrics();
-                logger.info("🔎 Aggregated Metrics: {}", agg);
+                logger.info("Aggregated metrics: {}", agg);
             }
             if (running) {
                 sleepWithInterruptHandling();
             }
         }
-        logger.info("=== SERVER MONITOR OUT—PEACE ===");
+        logger.info("Server monitor run loop exited.");
     }
 
     private void monitorServers() {
         var servers = balancer.getServers();
         if (servers == null) {
-            logger.warn("Server list is null — skipping monitor cycle.");
+            logger.warn("Server list is null; skipping monitor cycle.");
             return;
         }
         if (servers.isEmpty()) {
-            logger.info("No servers to monitor — chilling.");
+            logger.info("No servers available for monitoring.");
             return;
         }
         processServers(servers);
@@ -356,7 +356,7 @@ public class ServerMonitor implements Runnable {
     }
 
     private void logMetricChanges(Server server, double[] previous, double[] current) {
-        logger.debug("Metrics updated for server {}: CPU: %.2f%% → %.2f%%, Mem: %.2f%% → %.2f%%, Disk: %.2f%% → %.2f%%",
+        logger.debug("Metrics updated for server {}: CPU from %.2f%% to %.2f%%, memory from %.2f%% to %.2f%%, disk from %.2f%% to %.2f%%",
                      server.getServerId(), previous[0], current[0], previous[1], current[1], previous[2], current[2]);
     }
 
@@ -368,7 +368,7 @@ public class ServerMonitor implements Runnable {
 
         if (cpu >= alertThreshold || mem >= alertThreshold || disk >= alertThreshold) {
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-            String alertMsg = String.format("%s - ALERT: Server %s (%s) is HOT! CPU: %.2f%% Mem: %.2f%% Disk: %.2f%%",
+            String alertMsg = String.format("%s - ALERT: Server %s (%s) exceeded threshold. CPU: %.2f%% Mem: %.2f%% Disk: %.2f%%",
                                             timestamp, server.getServerId(), server.getServerType(), cpu, mem, disk);
             logger.warn(alertMsg);
             balancer.logAlert(alertMsg);

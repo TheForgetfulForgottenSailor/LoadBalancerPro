@@ -106,7 +106,7 @@ public class LoadBalancerCLI {
                         logger.error("Operation failed: {}", getRootCauseMessage(e), e);
                         printError("Operation failed: " + getRootCauseMessage(e));
                         if (console.isScannerClosed()) {
-                            logger.error("Scanner closed unexpectedly — shutting down.");
+                            logger.error("Input scanner closed unexpectedly; shutting down.");
                             shutdown();
                             return;
                         }
@@ -293,7 +293,7 @@ public class LoadBalancerCLI {
 
         private void checkMonitorStatus() {
             if (!monitorExecutor.isShutdown() && monitorExecutor.isTerminated()) {
-                logger.warn("Server monitor stopped unexpectedly — restarting...");
+                logger.warn("Server monitor stopped unexpectedly; restarting.");
                 int attempts = 0;
                 final int maxAttempts = 5;
                 while (attempts < maxAttempts && running) {
@@ -436,8 +436,8 @@ public class LoadBalancerCLI {
                     case 6: result = balancer.predictiveLoadBalancingWithResult(data); break;
                 }
                 if (result == null || (result.allocations().isEmpty() && result.unallocatedLoad() <= 0.0)) {
-                    logger.warn("No distribution generated—no servers available?");
-                    printError("No distribution—no servers available?");
+                    logger.warn("No distribution generated; no servers are available.");
+                    printError("No distribution generated; no servers are available.");
                     return;
                 }
                 logger.info("Distribution: {}, unallocatedLoad={}", result.allocations(), result.unallocatedLoad());

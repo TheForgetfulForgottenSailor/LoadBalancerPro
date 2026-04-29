@@ -129,7 +129,7 @@ public class LoadBalancer {
                     server.getDiskUsage() >= maxUsageThreshold || !server.isHealthy()) {
                     server.setHealthy(false);
                     failedServers.add(server);
-                    logger.warn("Server {} ({}) down—RIP!", server.getServerId(), server.getServerType());
+                    logger.warn("Server {} ({}) marked unhealthy.", server.getServerId(), server.getServerType());
                 }
             }
             if (!failedServers.isEmpty()) removeFailedServersAndRecover(failedServers);
@@ -357,7 +357,7 @@ public class LoadBalancer {
                     }
                 }
                 cloudManagerOptionalShutdown();
-                logger.info("=== LOAD BALANCER SHUT DOWN—GAME OVER ===");
+                logger.info("Load balancer shutdown complete.");
                 return;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
