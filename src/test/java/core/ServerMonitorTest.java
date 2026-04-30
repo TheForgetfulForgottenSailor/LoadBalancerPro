@@ -78,10 +78,10 @@ class ServerMonitorTest {
         monitorThread = new Thread(monitor);
         monitorThread.start();
 
-        String accessKey = "test_access_key";
-        String secretKey = "test_secret_key";
+        String accessKey = "UNIT_TEST_ACCESS_KEY_ID";
+        String secretKey = "UNIT_TEST_SECRET_ACCESS_KEY";
         String region = "us-east-1";
-        if (!accessKey.equals("test_access_key") && !secretKey.equals("test_secret_key")) {
+        if (!accessKey.equals("UNIT_TEST_ACCESS_KEY_ID") && !secretKey.equals("UNIT_TEST_SECRET_ACCESS_KEY")) {
             balancer.initializeCloud(accessKey, secretKey, region, 5, 10);
             TimeUnit.SECONDS.sleep(30); // Wait for cloud initialization
         }

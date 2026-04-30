@@ -68,8 +68,10 @@ jobs:
           HEALTHY_LOG="$(mktemp)"
           OVERLOADED_LOG="$(mktemp)"
           INVALID_LOG="$(mktemp)"
+          JAR="$(ls -t target/LoadBalancerPro-*.jar | grep -Ev '(-sources|-javadoc|-tests)\.jar$' | head -n 1)"
+          test -n "$JAR"
 
-          java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=healthy >"$HEALTHY_LOG" 2>&1
+          java -jar "$JAR" --lase-demo=healthy >"$HEALTHY_LOG" 2>&1
           assert_contains "$HEALTHY_LOG" "=== LoadBalancerPro LASE Synthetic Demo ==="
           assert_contains "$HEALTHY_LOG" "Evaluation ID: lase-demo-healthy"
           assert_contains "$HEALTHY_LOG" "synthetic demo"
@@ -79,7 +81,7 @@ jobs:
           assert_contains "$HEALTHY_LOG" "No CloudManager calls"
           assert_no_spring_startup "$HEALTHY_LOG"
 
-          java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=overloaded >"$OVERLOADED_LOG" 2>&1
+          java -jar "$JAR" --lase-demo=overloaded >"$OVERLOADED_LOG" 2>&1
           assert_contains "$OVERLOADED_LOG" "Evaluation ID: lase-demo-overloaded"
           assert_contains "$OVERLOADED_LOG" "Load Shedding:"
           assert_contains "$OVERLOADED_LOG" "Action: SHED"
@@ -89,7 +91,7 @@ jobs:
           assert_no_spring_startup "$OVERLOADED_LOG"
 
           set +e
-          java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=invalid-name >"$INVALID_LOG" 2>&1
+          java -jar "$JAR" --lase-demo=invalid-name >"$INVALID_LOG" 2>&1
           status=$?
           set -e
           if [ "$status" -ne 2 ]; then
@@ -110,7 +112,9 @@ jobs:
         run: |
           set -euo pipefail
           APP_LOG="$(mktemp)"
-          java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar \
+          JAR="$(ls -t target/LoadBalancerPro-*.jar | grep -Ev '(-sources|-javadoc|-tests)\.jar$' | head -n 1)"
+          test -n "$JAR"
+          java -jar "$JAR" \
             --server.address=127.0.0.1 \
             --server.port=18080 \
             --spring.profiles.active=local >"$APP_LOG" 2>&1 &

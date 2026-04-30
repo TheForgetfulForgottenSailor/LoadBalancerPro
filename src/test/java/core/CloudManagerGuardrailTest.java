@@ -39,8 +39,8 @@ import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.when;
 
 class CloudManagerGuardrailTest {
-    private static final String ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE";
-    private static final String SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+    private static final String ACCESS_KEY = "UNIT_TEST_ACCESS_KEY_ID";
+    private static final String SECRET_KEY = "UNIT_TEST_SECRET_ACCESS_KEY";
     private static final String CLOUD_ENVIRONMENT_PROPERTY = "cloud.environment";
     private static final String CLOUD_ALLOWED_AWS_ACCOUNT_IDS_PROPERTY = "cloud.allowedAwsAccountIds";
     private static final String CLOUD_CURRENT_AWS_ACCOUNT_ID_PROPERTY = "cloud.currentAwsAccountId";

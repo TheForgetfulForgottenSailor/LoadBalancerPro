@@ -78,7 +78,7 @@ mvn package
 Run the packaged API locally:
 
 ```bash
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
 ```
 
 Verify the health endpoint:
@@ -98,7 +98,7 @@ mvn spring-boot:run
 ```bash
 mvn test
 mvn package
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
 curl http://127.0.0.1:18080/api/health
 docker build -t loadbalancerpro:local .
 docker run --rm --name loadbalancerpro-demo -p 127.0.0.1:8080:8080 loadbalancerpro:local
@@ -110,7 +110,7 @@ The packaged JAR can print deterministic, synthetic LASE evaluation reports with
 
 ```bash
 mvn package
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=healthy
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --lase-demo=healthy
 ```
 
 This is a safe internal control-plane demo only. It is recommendation-only, uses synthetic inputs, does not touch live AWS resources, does not call `CloudManager`, does not mutate real routing state, does not require the API server, does not require AWS credentials, and does not require network access.
@@ -118,14 +118,14 @@ This is a safe internal control-plane demo only. It is recommendation-only, uses
 Available demo commands:
 
 ```bash
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=all
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=healthy
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=overloaded
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=error-storm
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=partial-outage
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=low-sample
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=invalid-name
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --lase-demo
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --lase-demo=all
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --lase-demo=healthy
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --lase-demo=overloaded
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --lase-demo=error-storm
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --lase-demo=partial-outage
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --lase-demo=low-sample
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --lase-demo=invalid-name
 ```
 
 `--lase-demo` and `--lase-demo=all` print every scenario. Named scenarios print only that scenario. Invalid names fail safely with exit code `2`, print valid scenario names, and do not emit a raw stack trace.
@@ -167,10 +167,11 @@ GitHub Actions verifies the default release gates on every push and pull request
 mvn -B -DskipTests dependency:tree
 mvn -B test
 mvn -B package
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=healthy
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=overloaded
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=invalid-name
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
+JAR="$(ls -t target/LoadBalancerPro-*.jar | grep -Ev '(-sources|-javadoc|-tests)\.jar$' | head -n 1)"
+java -jar "$JAR" --lase-demo=healthy
+java -jar "$JAR" --lase-demo=overloaded
+java -jar "$JAR" --lase-demo=invalid-name
+java -jar "$JAR" --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
 docker build -t loadbalancerpro:ci .
 ```
 

@@ -18,8 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LoadBalancerCLITest {
-    private static final String ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE";
-    private static final String SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+    private static final String ACCESS_KEY = "UNIT_TEST_ACCESS_KEY_ID";
+    private static final String SECRET_KEY = "UNIT_TEST_SECRET_ACCESS_KEY";
 
     @Test
     void cloudSettingsRejectMissingRequiredValues() {

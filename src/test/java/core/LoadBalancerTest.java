@@ -841,7 +841,7 @@ class LoadBalancerTest {
     @Test
     void testInitializeCloud_ValidCredentials() throws InterruptedException {
         logger.info("=== TESTING CLOUD INITIALIZATION ===");
-        balancer.initializeCloud("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "us-east-1", 2, 3);
+        balancer.initializeCloud("UNIT_TEST_ACCESS_KEY_ID", "UNIT_TEST_SECRET_ACCESS_KEY", "us-east-1", 2, 3);
         Thread.sleep(100); // Brief delay to simulate cloud setup
         assertTrue(balancer.hasCloudManager(), "CloudManager should be configured.");
         assertTrue(balancer.getServers().isEmpty(), "Dry-run mode must not add live cloud servers.");

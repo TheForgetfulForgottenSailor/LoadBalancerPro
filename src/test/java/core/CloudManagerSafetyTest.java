@@ -8,8 +8,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CloudManagerSafetyTest {
-    private static final String ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE";
-    private static final String SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+    private static final String ACCESS_KEY = "UNIT_TEST_ACCESS_KEY_ID";
+    private static final String SECRET_KEY = "UNIT_TEST_SECRET_ACCESS_KEY";
 
     @Test
     void defaultConfigIsDryRunAndDoesNotProvisionServers() throws Exception {
@@ -34,6 +34,6 @@ class CloudManagerSafetyTest {
         assertThrows(IllegalArgumentException.class,
             () -> new CloudConfig(ACCESS_KEY, "your-secret-key", "us-east-1", "lt-placeholder", "subnet-placeholder"));
         assertThrows(IllegalArgumentException.class,
-            () -> new CloudConfig("test_access_key", "test_secret_key", "us-east-1", "lt-placeholder", "subnet-placeholder"));
+            () -> new CloudConfig("TEST_ACCESS_KEY_ID", "TEST_SECRET_ACCESS_KEY", "us-east-1", "lt-placeholder", "subnet-placeholder"));
     }
 }
