@@ -2,6 +2,7 @@ package api;
 
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -24,9 +25,17 @@ class ProdProfileConfigurationTest {
     @Autowired
     private Environment environment;
 
+    @Autowired
+    private AllocatorService allocatorService;
+
     @Test
     void prodProfileLoadsWithoutLiveCloudEnabled() {
         assertEquals("false", environment.getProperty("cloud.liveMode"));
+    }
+
+    @Test
+    void prodProfileKeepsLaseShadowAdvisorDisabledByDefault() {
+        assertFalse(allocatorService.isLaseShadowEnabledForTesting());
     }
 
     @Test

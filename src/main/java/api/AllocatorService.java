@@ -3,6 +3,7 @@ package api;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import core.LoadBalancer;
@@ -13,6 +14,15 @@ import core.ServerType;
 
 @Service
 public class AllocatorService {
+    private static final String LASE_SHADOW_PROPERTY = "loadbalancerpro.lase.shadow.enabled";
+    private static final String LASE_SHADOW_ENVIRONMENT_VARIABLE = "LOADBALANCERPRO_LASE_SHADOW_ENABLED";
+
+    private final boolean laseShadowEnabled;
+
+    public AllocatorService(Environment environment) {
+        this.laseShadowEnabled = resolveLaseShadowEnabled(environment);
+    }
+
     public AllocationResponse capacityAware(AllocationRequest request) {
         return allocate(request, true);
     }
@@ -23,7 +33,7 @@ public class AllocatorService {
 
     private AllocationResponse allocate(AllocationRequest request, boolean capacityAware) {
         validateRequest(request);
-        LoadBalancer balancer = new LoadBalancer();
+        LoadBalancer balancer = createLoadBalancer();
         try {
             for (ServerInput input : request.servers()) {
                 balancer.addServer(toServer(input));
@@ -42,6 +52,25 @@ public class AllocatorService {
         } finally {
             balancer.shutdown();
         }
+    }
+
+    static boolean resolveLaseShadowEnabled(Environment environment) {
+        if (environment == null) {
+            return false;
+        }
+        String configured = environment.getProperty(LASE_SHADOW_PROPERTY);
+        if (configured == null || configured.isBlank()) {
+            configured = environment.getProperty(LASE_SHADOW_ENVIRONMENT_VARIABLE);
+        }
+        return Boolean.parseBoolean(configured);
+    }
+
+    boolean isLaseShadowEnabledForTesting() {
+        return laseShadowEnabled;
+    }
+
+    private LoadBalancer createLoadBalancer() {
+        return new LoadBalancer(laseShadowEnabled);
     }
 
     private static ScalingSimulationResult simulateScaling(

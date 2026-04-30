@@ -1,6 +1,7 @@
 package api;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -21,6 +22,9 @@ import org.springframework.test.web.servlet.MockMvc;
 class LocalProfileConfigurationTest {
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private AllocatorService allocatorService;
 
     @Test
     void localProfileKeepsHealthAndDemoObservabilityAvailable() throws Exception {
@@ -45,6 +49,11 @@ class LocalProfileConfigurationTest {
                         .header("Access-Control-Request-Headers", "Content-Type"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"));
+    }
+
+    @Test
+    void localProfileKeepsLaseShadowAdvisorDisabledByDefault() {
+        assertFalse(allocatorService.isLaseShadowEnabledForTesting());
     }
 
     @Test

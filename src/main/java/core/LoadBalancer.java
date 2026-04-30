@@ -33,6 +33,7 @@ public class LoadBalancer {
     private final double predictiveLoadFactor;
     private final double maxUsageThreshold;
     private CloudManager cloudManager;
+    private volatile LaseShadowAdvisor laseShadowAdvisor;
 
     public enum Strategy {
         ROUND_ROBIN,
@@ -42,10 +43,23 @@ public class LoadBalancer {
     private volatile Strategy strategy = Strategy.ROUND_ROBIN;
 
     public LoadBalancer(double maxUsageThreshold, int hashReplicas, double predictiveLoadFactor) {
+        this(maxUsageThreshold, hashReplicas, predictiveLoadFactor, LaseShadowAdvisor.fromSystemProperties());
+    }
+
+    public LoadBalancer(boolean laseShadowEnabled) {
+        this(DEFAULT_MAX_USAGE_THRESHOLD, DEFAULT_HASH_REPLICAS, DEFAULT_PREDICTIVE_LOAD_FACTOR,
+                new LaseShadowAdvisor(laseShadowEnabled));
+    }
+
+    private LoadBalancer(double maxUsageThreshold,
+                         int hashReplicas,
+                         double predictiveLoadFactor,
+                         LaseShadowAdvisor laseShadowAdvisor) {
         this.maxUsageThreshold = Math.max(0, maxUsageThreshold);
         this.hashReplicas = Math.max(1, hashReplicas);
         this.predictiveLoadFactor = Math.max(1.0, predictiveLoadFactor);
         this.monitor = new ServerMonitor(this, this.maxUsageThreshold, 1000, 10.0, null);
+        this.laseShadowAdvisor = Objects.requireNonNull(laseShadowAdvisor, "laseShadowAdvisor cannot be null");
     }
 
     public LoadBalancer() {
@@ -284,14 +298,16 @@ public class LoadBalancer {
 
     public LoadDistributionResult capacityAwareWithResult(double totalData) {
         validateDistributionInput(totalData);
-        return distributeWithHealthyServersResult(totalData, servers -> {
-            LoadDistributionResult result = LoadDistributionPlanner.capacityAwareResult(servers, totalData);
-            for (Map.Entry<String, Double> entry : result.allocations().entrySet()) {
+        LoadDistributionResult result = distributeWithHealthyServersResult(totalData, servers -> {
+            LoadDistributionResult distributionResult = LoadDistributionPlanner.capacityAwareResult(servers, totalData);
+            for (Map.Entry<String, Double> entry : distributionResult.allocations().entrySet()) {
                 currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
-            DomainMetrics.recordAllocation("CAPACITY_AWARE", servers.size(), result.unallocatedLoad());
-            return result;
+            DomainMetrics.recordAllocation("CAPACITY_AWARE", servers.size(), distributionResult.unallocatedLoad());
+            return distributionResult;
         });
+        observeLaseShadow("CAPACITY_AWARE", totalData, result);
+        return result;
     }
 
     public Map<String, Double> predictiveLoadBalancing(double totalData) {
@@ -300,15 +316,17 @@ public class LoadBalancer {
 
     public LoadDistributionResult predictiveLoadBalancingWithResult(double totalData) {
         validateDistributionInput(totalData);
-        return distributeWithHealthyServersResult(totalData, servers -> {
-            LoadDistributionResult result = LoadDistributionPlanner.predictiveResult(
+        LoadDistributionResult result = distributeWithHealthyServersResult(totalData, servers -> {
+            LoadDistributionResult distributionResult = LoadDistributionPlanner.predictiveResult(
                 servers, totalData, calculatePredictedLoads(servers));
-            for (Map.Entry<String, Double> entry : result.allocations().entrySet()) {
+            for (Map.Entry<String, Double> entry : distributionResult.allocations().entrySet()) {
                 currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
             }
-            DomainMetrics.recordAllocation("PREDICTIVE", servers.size(), result.unallocatedLoad());
-            return result;
+            DomainMetrics.recordAllocation("PREDICTIVE", servers.size(), distributionResult.unallocatedLoad());
+            return distributionResult;
         });
+        observeLaseShadow("PREDICTIVE", totalData, result);
+        return result;
     }
 
     public ScalingRecommendation recommendScaling(double unallocatedLoad, double targetCapacityPerServer) {
@@ -527,6 +545,27 @@ public class LoadBalancer {
 
     private void validateDistributionInput(double totalData) {
         if (totalData < 0) throw new IllegalArgumentException("Total data cannot be negative");
+    }
+
+    void setLaseShadowAdvisorForTesting(LaseShadowAdvisor advisor) {
+        laseShadowAdvisor = advisor == null ? LaseShadowAdvisor.disabled() : advisor;
+    }
+
+    Optional<LaseEvaluationReport> getLastLaseShadowReportForTesting() {
+        LaseShadowAdvisor advisor = laseShadowAdvisor;
+        return advisor == null ? Optional.empty() : advisor.lastReport();
+    }
+
+    private void observeLaseShadow(String strategyName, double totalData, LoadDistributionResult result) {
+        LaseShadowAdvisor advisor = laseShadowAdvisor;
+        if (advisor == null || !advisor.isEnabled()) {
+            return;
+        }
+        try {
+            advisor.observe(strategyName, getServers(), totalData, result);
+        } catch (RuntimeException e) {
+            logger.warn("LASE shadow observation failed safely: {}", e.getMessage());
+        }
     }
 
     private Map<String, Double> distributeWithHealthyServers(double totalData, 
