@@ -2,6 +2,8 @@ package api.config;
 
 import java.io.IOException;
 
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import jakarta.servlet.Filter;
@@ -12,6 +14,7 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletResponse;
 
 @Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class SecurityHeadersFilter implements Filter {
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)

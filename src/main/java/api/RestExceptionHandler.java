@@ -10,22 +10,28 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 @RestControllerAdvice
 public class RestExceptionHandler {
     @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class})
-    public ResponseEntity<ApiErrorResponse> badRequest(Exception exception) {
+    public ResponseEntity<ApiErrorResponse> badRequest(Exception exception, HttpServletRequest request) {
+        String message = exception instanceof HttpMessageNotReadableException
+                ? "Malformed JSON request body"
+                : rootMessage(exception);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorResponse.badRequest(rootMessage(exception)));
+                .body(ApiErrorResponse.badRequest(message, request.getRequestURI()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiErrorResponse> validation(MethodArgumentNotValidException exception) {
+    public ResponseEntity<ApiErrorResponse> validation(MethodArgumentNotValidException exception,
+                                                       HttpServletRequest request) {
         List<String> details = exception.getBindingResult().getFieldErrors().stream()
                 .map(RestExceptionHandler::fieldMessage)
                 .sorted()
                 .toList();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiErrorResponse.validation(details));
+                .body(ApiErrorResponse.validation(details, request.getRequestURI()));
     }
 
     private static String rootMessage(Throwable throwable) {

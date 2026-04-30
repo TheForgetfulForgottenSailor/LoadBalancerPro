@@ -5,7 +5,9 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -71,6 +73,36 @@ class AllocatorControllerTest {
                 .andExpect(jsonPath("$.scalingSimulation.recommendedAdditionalServers", is(1)))
                 .andExpect(jsonPath("$.scalingSimulation.simulatedOnly", is(true)))
                 .andExpect(jsonPath("$.scalingSimulation.reason", containsString("simulated scale-up")));
+    }
+
+    @Test
+    void capacityAwareSuccessResponseHasStableBrowserContractShape() throws Exception {
+        mockMvc.perform(post("/api/allocate/capacity-aware")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestedLoad": 10.0,
+                                  "servers": [
+                                    {
+                                      "id": "api-1",
+                                      "cpuUsage": 10.0,
+                                      "memoryUsage": 20.0,
+                                      "diskUsage": 30.0,
+                                      "capacity": 100.0,
+                                      "weight": 1.0,
+                                      "healthy": true
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.allocations").isMap())
+                .andExpect(jsonPath("$.unallocatedLoad").isNumber())
+                .andExpect(jsonPath("$.recommendedAdditionalServers").isNumber())
+                .andExpect(jsonPath("$.scalingSimulation").isMap())
+                .andExpect(jsonPath("$.scalingSimulation.simulatedOnly", is(true)))
+                .andExpect(jsonPath("$.error").doesNotExist());
     }
 
     @Test
@@ -183,7 +215,15 @@ class AllocatorControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error", is("validation_failed")))
                 .andExpect(jsonPath("$.message", is("Request validation failed")))
-                .andExpect(jsonPath("$.details").isArray());
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")))
+                .andExpect(jsonPath("$.timestamp").isString())
+                .andExpect(jsonPath("$.details").isArray())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("X-Frame-Options", "DENY"))
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(jsonPath("$.trace").doesNotExist())
+                .andExpect(jsonPath("$.exception").doesNotExist());
     }
 
     @Test
@@ -212,6 +252,100 @@ class AllocatorControllerTest {
     }
 
     @Test
+    void malformedJsonReturnsConsistentSafeErrorShape() throws Exception {
+        mockMvc.perform(post("/api/allocate/capacity-aware")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestedLoad": 10.0,
+                                  "servers": [
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.error", is("bad_request")))
+                .andExpect(jsonPath("$.message", is("Malformed JSON request body")))
+                .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")))
+                .andExpect(jsonPath("$.timestamp").isString())
+                .andExpect(jsonPath("$.details").isArray())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("X-Frame-Options", "DENY"))
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(jsonPath("$.trace").doesNotExist())
+                .andExpect(jsonPath("$.exception").doesNotExist());
+    }
+
+    @Test
+    void oversizedJsonRequestIsRejectedWithSafeErrorShape() throws Exception {
+        String oversizedId = "S".repeat(20_000);
+        String oversizedBody = """
+                {
+                  "requestedLoad": 10.0,
+                  "servers": [
+                    {
+                      "id": "%s",
+                      "cpuUsage": 10.0,
+                      "memoryUsage": 20.0,
+                      "diskUsage": 30.0,
+                      "capacity": 100.0,
+                      "weight": 1.0,
+                      "healthy": true
+                    }
+                  ]
+                }
+                """.formatted(oversizedId);
+
+        mockMvc.perform(post("/api/allocate/capacity-aware")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(oversizedBody))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status", is(413)))
+                .andExpect(jsonPath("$.error", is("payload_too_large")))
+                .andExpect(jsonPath("$.message", containsString("Request body exceeds")))
+                .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")))
+                .andExpect(jsonPath("$.timestamp").isString())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("X-Frame-Options", "DENY"))
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(jsonPath("$.trace").doesNotExist())
+                .andExpect(jsonPath("$.exception").doesNotExist());
+    }
+
+    @Test
+    void corsPreflightAllowsConfiguredBrowserOrigins() throws Exception {
+        mockMvc.perform(options("/api/allocate/capacity-aware")
+                        .header("Origin", "http://localhost:3000")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "Content-Type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"))
+                .andExpect(header().string("Access-Control-Allow-Methods", containsString("POST")))
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("Content-Type")));
+    }
+
+    @Test
+    void corsPreflightDeniesUnconfiguredOrigins() throws Exception {
+        mockMvc.perform(options("/api/allocate/capacity-aware")
+                        .header("Origin", "https://evil.example")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "Content-Type"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+    }
+
+    @Test
+    void apiResponsesIncludeExpectedSecurityHeadersWithoutLocalHsts() throws Exception {
+        mockMvc.perform(get("/api/health"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("X-Frame-Options", "DENY"))
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(header().doesNotExist("Strict-Transport-Security"));
+    }
+
+    @Test
     void actuatorHealthInfoAndMetricsAreAvailable() throws Exception {
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk())
@@ -231,9 +365,27 @@ class AllocatorControllerTest {
     }
 
     @Test
+    void actuatorDoesNotExposeEnvironmentEndpointByDefault() throws Exception {
+        mockMvc.perform(get("/actuator/env"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void actuatorReadinessIsAvailable() throws Exception {
         mockMvc.perform(get("/actuator/health/readiness"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").exists());
+    }
+
+    @Test
+    void swaggerUiAndOpenApiDocsAreAvailable() throws Exception {
+        mockMvc.perform(get("/swagger-ui.html"))
+                .andExpect(status().is3xxRedirection());
+
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.openapi").exists())
+                .andExpect(jsonPath("$.paths./api/allocate/capacity-aware").exists());
     }
 }
