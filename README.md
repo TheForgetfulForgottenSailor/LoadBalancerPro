@@ -203,7 +203,7 @@ Reference: https://aws.amazon.com/blogs/developer/announcing-end-of-support-for-
 
 ## Test Notes
 
-The default Maven test suite uses mocked cloud clients for CloudManager safety coverage and does not create or modify real AWS resources. A small set of legacy ServerMonitor cloud tests remain guarded by JUnit assumptions because they require an initialized CloudManager; they are skipped in the default local/CI path unless explicit cloud setup is provided.
+The default Maven test suite uses mocked cloud clients for CloudManager and ServerMonitor cloud-path coverage. It does not create, modify, or delete real AWS resources, and `mvn test` is expected to complete with zero skipped tests. Live AWS validation is intentionally outside the default Maven lifecycle; run it only in a controlled AWS sandbox with explicit cloud guardrails, operator intent, and disposable resources.
 
 ## Cloud Safety Modes
 

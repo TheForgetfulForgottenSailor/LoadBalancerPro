@@ -1,17 +1,19 @@
 package test.core;
 
 import core.LoadBalancer;
+import core.CloudManager;
 import core.Server;
 import core.ServerMonitor;
+import core.ServerType;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.*;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -153,6 +155,49 @@ class ServerMonitorTest {
             balancer.addServer(server);
             logger.debug("Added server {} to balancer", server.getServerId());
         }
+    }
+
+    private void attachCloudManager(CloudManager cloudManager) throws ReflectiveOperationException {
+        Field cloudManagerField = LoadBalancer.class.getDeclaredField("cloudManager");
+        cloudManagerField.setAccessible(true);
+        cloudManagerField.set(balancer, cloudManager);
+    }
+
+    private void restartMonitor(ServerMonitor.Config config) throws InterruptedException {
+        monitor.stop();
+        monitorThread.interrupt();
+        monitorThread.join(5000);
+        assertFalse(monitorThread.isAlive(), "Existing monitor thread should stop before restart.");
+
+        monitor = new ServerMonitor(config, balancer, null);
+        monitorThread = new Thread(monitor);
+        monitorThread.start();
+    }
+
+    private CloudManager mockedCloudManagerWithCapacityControl() {
+        CloudManager cloudManager = mock(CloudManager.class);
+        doAnswer(invocation -> {
+            int desiredCapacity = invocation.getArgument(0);
+            setMockCloudCapacity(desiredCapacity);
+            return null;
+        }).when(cloudManager).scaleServers(anyInt());
+        when(cloudManager.getMinServers()).thenReturn(0);
+        return cloudManager;
+    }
+
+    private void setMockCloudCapacity(int desiredCapacity) {
+        for (Server server : balancer.getServersByType(ServerType.CLOUD)) {
+            balancer.removeServer(server.getServerId());
+        }
+        for (int i = 1; i <= desiredCapacity; i++) {
+            Server cloudServer = new Server("CloudServer-" + i, 10.0, 20.0, 30.0, ServerType.CLOUD);
+            cloudServer.setCapacity(500.0);
+            balancer.addServer(cloudServer);
+        }
+    }
+
+    private long cloudServerCount() {
+        return balancer.getServersByType(ServerType.CLOUD).size();
     }
 
     /**
@@ -396,23 +441,22 @@ class ServerMonitorTest {
      */
     @Test
     @Timeout(value = 60)
-    void testCloudAutoScaling() throws InterruptedException {
-        logger.info("=== TESTING CLOUD AUTO SCALING ===");
-        assumeTrue(balancer.getCloudManager() != null, "Cloud integration not initialized.");
-
-        waitForMonitorCycles(6, 35);
-        int initialCount = balancer.getServers().size();
-        assertTrue(initialCount >= 5, "Initial server count should be at least 5.");
+    void testCloudAutoScaling() throws Exception {
+        logger.info("=== TESTING CLOUD AUTO SCALING WITH MOCKED CLOUD MANAGER ===");
+        CloudManager cloudManager = mockedCloudManagerWithCapacityControl();
+        attachCloudManager(cloudManager);
+        setMockCloudCapacity(5);
+        long initialCount = cloudServerCount();
+        assertEquals(5, initialCount, "Initial mocked cloud server count should be 5.");
 
         balancer.scaleCloudServers(10);
-        waitForMonitorCycles(6, 35);
 
-        int scaledCount = balancer.getServers().size();
-        assertTrue(scaledCount >= 10, "Scaled server count should be at least 10.");
+        long scaledCount = cloudServerCount();
+        assertEquals(10, scaledCount, "Mocked cloud scaling should register the desired capacity.");
         assertTrue(scaledCount >= initialCount, "Server count should increase after scaling.");
+        verify(cloudManager).scaleServers(10);
         logger.info("Cloud auto scaling test passed: Scaled from {} to {}.", initialCount, scaledCount);
         verify(logger).info("Cloud auto scaling test passed: Scaled from {} to {}.", initialCount, scaledCount);
-        System.out.println("Cloud auto-scaling successfully validated.");
     }
 
     /**
@@ -425,20 +469,19 @@ class ServerMonitorTest {
      */
     @Test
     @Timeout(value = 60)
-    void testCloudServerRemoval() throws InterruptedException {
-        logger.info("=== TESTING CLOUD SERVER REMOVAL ===");
-        assumeTrue(balancer.getCloudManager() != null, "Cloud integration not initialized.");
-
-        balancer.scaleCloudServers(10);
-        waitForMonitorCycles(6, 35);
-        int initialCount = balancer.getServers().size();
-        assertTrue(initialCount >= 10, "Scaled server count should be at least 10.");
+    void testCloudServerRemoval() throws Exception {
+        logger.info("=== TESTING CLOUD SERVER REMOVAL WITH MOCKED CLOUD MANAGER ===");
+        CloudManager cloudManager = mockedCloudManagerWithCapacityControl();
+        attachCloudManager(cloudManager);
+        setMockCloudCapacity(10);
+        long initialCount = cloudServerCount();
+        assertEquals(10, initialCount, "Initial mocked cloud server count should be 10.");
 
         balancer.scaleCloudServers(5);
-        waitForMonitorCycles(6, 35);
 
-        int finalCount = balancer.getServers().size();
-        assertTrue(finalCount <= 5, "Scaled server count should be at most 5.");
+        long finalCount = cloudServerCount();
+        assertEquals(5, finalCount, "Mocked cloud removal should reduce to the desired capacity.");
+        verify(cloudManager).scaleServers(5);
         logger.info("Cloud server removal test passed: Reduced from {} to {}.", initialCount, finalCount);
         verify(logger).info("Cloud server removal test passed: Reduced from {} to {}.", initialCount, finalCount);
     }
@@ -452,19 +495,19 @@ class ServerMonitorTest {
      */
     @Test
     @Timeout(value = 30)
-    void testCloudFailover_WithTimeout() throws InterruptedException {
-        logger.info("=== TESTING CLOUD FAILOVER WITH TIMEOUT ===");
-        assumeTrue(balancer.getCloudManager() != null, "Cloud integration not initialized.");
+    void testCloudFailover_WithTimeout() throws Exception {
+        logger.info("=== TESTING CLOUD FAILOVER WITH MOCKED CLOUD MANAGER ===");
+        CloudManager cloudManager = mock(CloudManager.class);
+        when(cloudManager.getMinServers()).thenReturn(0);
+        attachCloudManager(cloudManager);
+        Server failingServer = new Server("CloudFailing", 50.0, 50.0, 50.0, ServerType.CLOUD);
+        addServers(failingServer);
 
-        balancer.scaleCloudServers(5);
-        waitForMonitorCycles(6, 35);
-
-        Server failingServer = balancer.getServers().get(0);
         failingServer.updateMetrics(100.0, 100.0, 100.0);
-
-        waitForMonitorCycles(3, 20); // Longer wait to simulate delayed response
+        waitForMonitorCycles(2, 5);
 
         assertFalse(failingServer.isHealthy(), "Failing server should be marked unhealthy after timeout.");
+        assertNull(balancer.getServer("CloudFailing"), "Unhealthy cloud server should be removed from active servers.");
         logger.info("Cloud failover with timeout test passed: Server marked unhealthy.");
         verify(logger).info("Cloud failover with timeout test passed: Server marked unhealthy.");
     }
@@ -478,22 +521,35 @@ class ServerMonitorTest {
      */
     @Test
     @Timeout(value = 30)
-    void testCloudWatchMetrics_Failure() throws InterruptedException {
-        logger.info("=== TESTING CLOUDWATCH METRICS FAILURE ===");
-        assumeTrue(balancer.getCloudManager() != null, "Cloud integration not initialized.");
+    void testCloudWatchMetrics_Failure() throws Exception {
+        logger.info("=== TESTING CLOUDWATCH METRICS FAILURE WITH MOCKED CLOUD MANAGER ===");
+        restartMonitor(new ServerMonitor.Config()
+                .withThreshold(80.0)
+                .withInterval(MONITOR_CYCLE_MS)
+                .withFluctuation(0.0)
+                .withAlertCooldownMs(0)
+                .withMaxCloudRetries(1)
+                .withCloudRetryBaseMs(1)
+                .withMaxConsecutiveCloudFailures(1));
+        CloudManager cloudManager = mock(CloudManager.class);
+        doThrow(new RuntimeException("Simulated CloudWatch failure"))
+                .when(cloudManager).updateServerMetricsFromCloud();
+        attachCloudManager(cloudManager);
+        Server cloudServer = new Server("CloudMetricFailure", 10.0, 20.0, 30.0, ServerType.CLOUD);
+        addServers(cloudServer);
 
-        balancer.scaleCloudServers(1);
-        waitForMonitorCycles(6, 35);
-        String instanceId = balancer.getServers().get(0).getServerId();
+        waitForMonitorCycles(35, 10);
 
-        double initialCpu = balancer.getServers().get(0).getCpuUsage();
-        waitForMonitorCycles(2, 15);
-
-        double cpuUsage = balancer.getCloudManager().getCloudMetric(instanceId, "CPUUtilization");
-        assertTrue(cpuUsage >= 0, "CPU metric should be retrieved or fallback to non-negative.");
-        assertNotEquals(initialCpu, balancer.getServers().get(0).getCpuUsage(), "CPU should update via fallback.");
-        logger.info("CloudWatch failure test passed: CPU usage retrieved as {}, fallback updated.", cpuUsage);
-        verify(logger).info("CloudWatch failure test passed: CPU usage retrieved as {}, fallback updated.", cpuUsage);
+        assertTrue(monitor.getStatus().getConsecutiveFailures() >= 1,
+                "Persistent cloud metric failure should increment the monitor failure count.");
+        assertTrue(cloudServer.getCpuUsage() >= 0.0 && cloudServer.getCpuUsage() <= 100.0,
+                "Fallback metrics should remain readable and within range after cloud metric failure.");
+        assertTrue(balancer.getAlertLog().stream()
+                .anyMatch(alert -> alert.contains("Persistent cloud metric fetch failure")),
+                "Persistent cloud metric failure should raise a critical alert.");
+        verify(cloudManager, atLeastOnce()).updateServerMetricsFromCloud();
+        logger.info("CloudWatch failure test passed: Mocked failure recorded and fallback metrics remained valid.");
+        verify(logger).info("CloudWatch failure test passed: Mocked failure recorded and fallback metrics remained valid.");
     }
 
     /**
@@ -506,19 +562,19 @@ class ServerMonitorTest {
      */
     @Test
     @Timeout(value = 30)
-    void testCloudHealthCheck() throws InterruptedException {
-        logger.info("=== TESTING CLOUD HEALTH CHECK ===");
-        assumeTrue(balancer.getCloudManager() != null, "Cloud integration not initialized.");
+    void testCloudHealthCheck() throws Exception {
+        logger.info("=== TESTING CLOUD HEALTH CHECK WITH MOCKED CLOUD MANAGER ===");
+        CloudManager cloudManager = mock(CloudManager.class);
+        when(cloudManager.getMinServers()).thenReturn(0);
+        attachCloudManager(cloudManager);
+        Server unhealthyServer = new Server("CloudHealth", 50.0, 50.0, 50.0, ServerType.CLOUD);
+        addServers(unhealthyServer);
+        unhealthyServer.updateMetrics(100.0, 100.0, 100.0);
 
-        balancer.scaleCloudServers(5);
-        waitForMonitorCycles(6, 35);
-
-        Server unhealthyServer = balancer.getServers().get(0);
-        unhealthyServer.updateMetrics(99.0, 99.0, 99.0);
-
-        waitForMonitorCycles(2, 15);
+        waitForMonitorCycles(2, 5);
 
         assertFalse(unhealthyServer.isHealthy(), "Unhealthy cloud server should be marked unhealthy.");
+        assertNull(balancer.getServer("CloudHealth"), "Unhealthy cloud server should be removed from active servers.");
         logger.info("Cloud health check test passed: Server marked unhealthy.");
         verify(logger).info("Cloud health check test passed: Server marked unhealthy.");
     }
