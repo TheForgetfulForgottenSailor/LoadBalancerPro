@@ -1,14 +1,57 @@
 # LoadBalancerPro
 
-LoadBalancerPro is a Java load balancing project with:
+LoadBalancerPro is a Java 17 / Spring Boot load-balancing simulator and cloud-safety demo with guarded AWS mutation paths, hardened API contracts, robust import/export handling, CLI workflows, observability endpoints, CI release gates, Docker runtime hardening, and comprehensive mocked test coverage.
 
-- Core allocation strategies and server health models
-- A command-line interface
-- A Spring Boot REST API for calculation-only allocation requests
-- Micrometer/Actuator observability, including Prometheus metrics
-- Guardrailed AWS Auto Scaling integration that is dry-run by default
+It is built as a polished portfolio and enterprise-demo system: the code demonstrates production-minded boundaries, tests, packaging, and cloud guardrails, but it is not a drop-in production cloud load balancer.
 
-The API and CLI are safe by default: allocation endpoints do not call AWS, CLI cloud integration is disabled unless requested, and cloud mutation stays disabled unless every live-mode guardrail is configured explicitly.
+The API and CLI are safe by default: allocation endpoints do not call AWS, CLI cloud integration is disabled unless requested, Docker/local runs do not require AWS credentials, and cloud mutation stays disabled unless every live-mode guardrail is configured explicitly.
+
+## Architecture Overview
+
+- Core load-balancing engine: `core.LoadBalancer`, `core.Server`, and related strategy/result types model server health, capacity, weighted distribution, predictive allocation, and failure handling.
+- LASE telemetry/scoring/routing foundation: `core.ServerStateVector`, `core.ServerScoreCalculator`, `core.RoutingDecision`, and `core.TailLatencyPowerOfTwoStrategy` provide an internal foundation for tail-latency-aware, queue-aware, explainable routing decisions. This foundation is intentionally not wired into the public allocation flows yet.
+- ServerMonitor / health monitoring: `core.ServerMonitor` tracks local and mocked cloud health paths, emits health events, and coordinates with load balancer state without requiring real cloud resources in the default test suite.
+- API layer: the Spring Boot API exposes calculation-only allocation endpoints, request validation, browser CORS behavior, security headers, request-size limits, structured error envelopes, Swagger/OpenAPI docs, and Actuator health/metrics endpoints.
+- CLI workflow: `cli.LoadBalancerCLI` provides interactive local workflows and optional cloud integration while retaining ownership of monitor lifecycle cleanup.
+- CSV/JSON import/export utilities: parser and utility code validate schema, reject malformed input, neutralize CSV injection risk, and keep import/export contracts aligned.
+- CloudManager / AWS safety boundary: `core.CloudManager` is the only AWS mutation boundary. Live ASG creation, scaling, registration, and deletion paths are guarded, dry-run by default, and covered with mocked AWS clients.
+- Docker/CI/release gates: GitHub Actions runs dependency resolution, tests, packaging, packaged-JAR smoke checks, and Docker image builds. The Docker runtime uses a non-root user and a container healthcheck.
+
+## Roadmap: LoadBalancer Adaptive Systems Engine
+
+The LoadBalancer Adaptive Systems Engine (LASE) is the north-star direction for this repository: a research-grade adaptive systems engine for telemetry-driven routing, overload protection, failure modeling, cloud-safety simulation, and explainable load-balancing decisions.
+
+The internal telemetry-driven routing foundation now exists through immutable server state vectors, deterministic score calculation, power-of-two candidate sampling, and routing decision explanations. It is deliberately kept internal until the existing allocation behavior can be integrated safely.
+
+Planned LASE work includes adaptive concurrency limits, load shedding and priority classes, shadow autoscaling, failure scenario simulation, richer tail-latency-aware routing, and cloud-safety simulation. These are roadmap items, not claims of fully implemented production behavior.
+
+Roadmap backlog:
+
+- Tail-latency-aware routing that accounts for p95/p99 service behavior, not only average utilization.
+- Adaptive concurrency limits to keep overloaded servers from accepting more work than they can drain.
+- Load shedding and priority classes for graceful degradation under stress.
+- Shadow autoscaling mode that compares simulated scale decisions against actual traffic without mutating infrastructure.
+- Failure scenario simulator for repeatable demos of degraded servers, region constraints, and guarded cloud paths.
+- AWS SDK v2 migration before expanding live cloud behavior.
+- Optional auth and deployment profile for demos that need controlled browser/API access.
+
+## Safety Boundaries
+
+- Default tests use mocks for cloud-facing behavior and do not create, modify, or delete real AWS resources.
+- Docker and local API runs do not require AWS credentials by default.
+- Live AWS behavior requires explicit configuration, operator intent, capacity/account/region guardrails, and dry-run opt-out.
+- This repository is intended as a portfolio/enterprise-demo implementation, not production cloud infrastructure ready to operate unmanaged traffic.
+
+## Hardened Foundation Checklist
+
+- Cloud mutation guardrails fail closed for unsafe ASG creation, describe failures before scaling, and non-owned instance registration.
+- CSV/JSON handling validates schemas, handles robust CSV quoting, rejects malformed records, and neutralizes spreadsheet formula injection.
+- API hardening includes request-size enforcement, safe JSON error envelopes, validation response consistency, CORS coverage, and security headers.
+- Concurrency and lifecycle cleanup removed unsafe shared hashing state, bounded cache risk, and clarified CLI monitor shutdown ownership.
+- The default Maven test suite currently covers 209 tests with zero skipped tests and uses mocked cloud clients for cloud-adjacent coverage.
+- CI release gates verify tests, packaging, packaged-JAR smoke startup, dependency review on pull requests, and Docker image builds.
+- Docker runtime hardening runs the app as a non-root user and exposes a Docker healthcheck backed by `/api/health`.
+- The internal LASE telemetry-driven routing foundation models server state, scores tail-latency and pressure signals, samples candidates deterministically in tests, and emits explainable routing decisions.
 
 ## Requirements
 
@@ -20,7 +63,7 @@ Never commit AWS credentials, account IDs that should remain private, local conf
 
 ## Build, Test, And Package
 
-Run the unit and integration test suite:
+Run the default test suite:
 
 ```bash
 mvn test
@@ -29,19 +72,36 @@ mvn test
 Build the executable Spring Boot JAR:
 
 ```bash
-mvn clean package
+mvn package
 ```
 
 Run the packaged API locally:
 
 ```bash
-java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --spring.profiles.active=local
+java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
+```
+
+Verify the health endpoint:
+
+```bash
+curl http://127.0.0.1:18080/api/health
 ```
 
 Run the API from Maven during development:
 
 ```bash
 mvn spring-boot:run
+```
+
+## Quick Demo Commands
+
+```bash
+mvn test
+mvn package
+java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
+curl http://127.0.0.1:18080/api/health
+docker build -t loadbalancerpro:local .
+docker run --rm --name loadbalancerpro-demo -p 127.0.0.1:8080:8080 loadbalancerpro:local
 ```
 
 ## Continuous Integration
@@ -67,6 +127,8 @@ Build the image:
 ```bash
 docker build -t loadbalancerpro:local .
 ```
+
+The Docker build is self-contained and creates the packaged JAR inside the build stage; no local AWS credentials or prebuilt JAR are required.
 
 Run the API for a local demo:
 
@@ -266,7 +328,7 @@ If any deletion gate or ownership validation fails, deletion is skipped.
 ## Deployment Checklist
 
 - Run `mvn test`.
-- Run `mvn clean package`.
+- Run `mvn package`.
 - Start the JAR with the intended Spring profile and verify `/actuator/health`.
 - Verify `/actuator/metrics` and `/actuator/prometheus` are reachable only where intended.
 - Confirm no credentials are stored in Git, Docker images, shell history, or committed config files.
