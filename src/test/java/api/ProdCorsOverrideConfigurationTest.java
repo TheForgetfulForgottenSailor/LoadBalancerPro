@@ -30,4 +30,16 @@ class ProdCorsOverrideConfigurationTest {
                 .andExpect(header().string("Access-Control-Allow-Origin", "https://app.example.com"))
                 .andExpect(header().string("Access-Control-Allow-Methods", containsString("POST")));
     }
+
+    @Test
+    void prodProfileAllowsApiKeyHeaderInCorsPreflightForConfiguredOrigin() throws Exception {
+        mockMvc.perform(options("/api/allocate/capacity-aware")
+                        .header("Origin", "https://app.example.com")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "Content-Type,X-API-Key"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "https://app.example.com"))
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("Content-Type")))
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("X-API-Key")));
+    }
 }
