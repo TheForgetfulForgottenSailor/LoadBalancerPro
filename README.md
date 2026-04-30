@@ -48,7 +48,7 @@ Roadmap backlog:
 - CSV/JSON handling validates schemas, handles robust CSV quoting, rejects malformed records, and neutralizes spreadsheet formula injection.
 - API hardening includes request-size enforcement, safe JSON error envelopes, validation response consistency, CORS coverage, and security headers.
 - Concurrency and lifecycle cleanup removed unsafe shared hashing state, bounded cache risk, and clarified CLI monitor shutdown ownership.
-- The default Maven test suite currently covers 209 tests with zero skipped tests and uses mocked cloud clients for cloud-adjacent coverage.
+- The default Maven test suite currently covers 329 tests with zero skipped tests and uses mocked cloud clients for cloud-adjacent coverage.
 - CI release gates verify tests, packaging, packaged-JAR smoke startup, dependency review on pull requests, and Docker image builds.
 - Docker runtime hardening runs the app as a non-root user and exposes a Docker healthcheck backed by `/api/health`.
 - The internal LASE telemetry-driven routing foundation models server state, scores tail-latency and pressure signals, samples candidates deterministically in tests, and emits explainable routing decisions.
@@ -103,6 +103,61 @@ curl http://127.0.0.1:18080/api/health
 docker build -t loadbalancerpro:local .
 docker run --rm --name loadbalancerpro-demo -p 127.0.0.1:8080:8080 loadbalancerpro:local
 ```
+
+## Safe LASE Synthetic Demo
+
+The packaged JAR can print deterministic, synthetic LASE evaluation reports without starting the API server:
+
+```bash
+mvn package
+java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=healthy
+```
+
+This is a safe internal control-plane demo only. It is recommendation-only, uses synthetic inputs, does not touch live AWS resources, does not call `CloudManager`, does not mutate real routing state, does not require the API server, does not require AWS credentials, and does not require network access.
+
+Available demo commands:
+
+```bash
+java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo
+java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=all
+java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=healthy
+java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=overloaded
+java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=error-storm
+java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=partial-outage
+java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=low-sample
+java -jar target/LoadBalancerPro-1.0-SNAPSHOT.jar --lase-demo=invalid-name
+```
+
+`--lase-demo` and `--lase-demo=all` print every scenario. Named scenarios print only that scenario. Invalid names fail safely with exit code `2`, print valid scenario names, and do not emit a raw stack trace.
+
+Scenario coverage:
+
+| Scenario | Demonstrates |
+| --- | --- |
+| `HEALTHY` | Normal low-risk evaluation, routing allowed, no scale-up pressure, and low failure severity. |
+| `OVERLOADED` | High utilization, queue, and latency signals with low-priority shedding, shadow scale-up recommendation, and high-pressure failure signals. |
+| `ERROR_STORM` | High error rate without matching scale-up pressure; recommends `INVESTIGATE` instead of blind scale-up. |
+| `PARTIAL_OUTAGE` | Reduced healthy-server ratio, critical failure severity, and route-around / investigate style mitigation. |
+| `LOW_SAMPLE` | Insufficient telemetry with conservative `HOLD` / `LOW` behavior. |
+
+Sample excerpt:
+
+```text
+=== LoadBalancerPro LASE Synthetic Demo ===
+Mode: synthetic demo, recommendation-only evaluation.
+Safety: No live AWS resources touched. No real routing mutation. No CloudManager calls.
+Runtime: deterministic local inputs; no AWS keys, network access, or API server required.
+
+Evaluation ID: lase-demo-overloaded
+Routing Decision:
+Adaptive Concurrency:
+Load Shedding:
+Shadow Autoscaling:
+Failure Scenario:
+Summary:
+```
+
+This command demonstrates the internal LASE control-plane lab: telemetry-driven routing decisions, adaptive concurrency, load shedding, shadow autoscaling, failure scenario evaluation, and a consolidated explanation report. It does not claim production autoscaling, production chaos engineering, production cloud load-balancing behavior, or live AWS integration.
 
 ## Continuous Integration
 
