@@ -194,6 +194,30 @@ If `LOADBALANCERPRO_API_KEY` is missing or blank, protected prod-profile API req
 
 The prod-profile API key is a minimal client-auth gate. It is not full user identity, RBAC, OAuth, production authorization, or secret rotation. Before using the prod profile beyond a local demo, add deployment-specific auth, TLS or trusted proxy termination, secret management, actuator/network lockdown, logging retention, and live-cloud change controls. This profile is a safer baseline for review, not a claim that the app is ready for unmanaged production traffic.
 
+## Production Deployment Considerations
+
+LoadBalancerPro is designed as a portfolio/enterprise-demo system. The `prod` profile is a safer deployment starting point, not a complete production security system.
+
+Recommended deployment boundary:
+
+- Terminate TLS at a trusted reverse proxy or ingress such as nginx, Traefik, or a managed load balancer.
+- Keep the app bound to a private interface or container network; expose only the proxy publicly.
+- Configure the proxy to pass `Forwarded` or `X-Forwarded-*` headers, then enable `server.forward-headers-strategy=framework` through deployment config or by uncommenting the documented prod-profile setting.
+- Add external rate limiting and request filtering at the proxy or gateway layer.
+- Keep `/actuator/health` and `/actuator/info` behind private networking, firewall rules, or deployment-specific auth when running outside a local demo.
+- Send logs and metrics to your normal monitoring stack, with retention and access controls appropriate for operational data.
+- Store secrets in environment variables, a secret manager, or orchestrator-managed secret injection. Do not commit secrets, `.env` files, shell history, or generated logs containing sensitive values.
+
+Example local validation behind a trusted proxy configuration:
+
+```bash
+LOADBALANCERPRO_API_KEY=replace-with-random-deployment-secret \
+SERVER_FORWARD_HEADERS_STRATEGY=framework \
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=prod
+```
+
+The API key is passed through `LOADBALANCERPRO_API_KEY`, mapped to `loadbalancerpro.api.key`, and is never documented as a real value. Rotate it outside the application and avoid logging request headers at the proxy.
+
 ## Safe LASE Synthetic Demo
 
 The packaged JAR can print deterministic, synthetic LASE evaluation reports without starting the API server:
