@@ -76,9 +76,106 @@ class AdaptiveConcurrencyLimiterTest {
     }
 
     @Test
+    void currentLimitAboveMaximumClampsNextLimitSafely() {
+        ConcurrencyLimitDecision decision = limiter.calculateNextLimit(150, feedback("api-1", 10,
+                40.0, 70.0, 90.0, 0.01, 200));
+
+        assertEquals(ConcurrencyLimitDecision.Action.CLAMP, decision.action());
+        assertEquals(150, decision.previousLimit());
+        assertEquals(100, decision.nextLimit());
+        assertTrue(decision.reason().contains("max"));
+    }
+
+    @Test
+    void currentLimitExactlyMaximumClampsHealthyIncreaseSafely() {
+        ConcurrencyLimitDecision decision = limiter.calculateNextLimit(100, feedback("api-1", 10,
+                40.0, 70.0, 90.0, 0.01, 200));
+
+        assertEquals(ConcurrencyLimitDecision.Action.CLAMP, decision.action());
+        assertEquals(100, decision.previousLimit());
+        assertEquals(100, decision.nextLimit());
+        assertTrue(decision.reason().contains("max"));
+    }
+
+    @Test
+    void additiveStepLargerThanRemainingHeadroomClampsToMaximum() {
+        AdaptiveConcurrencyConfig config = new AdaptiveConcurrencyConfig(2, 100, 25, 0.5, 120.0, 0.05, 10);
+        AdaptiveConcurrencyLimiter limiterWithLargeStep = new AdaptiveConcurrencyLimiter(config, FIXED_CLOCK);
+
+        ConcurrencyLimitDecision decision = limiterWithLargeStep.calculateNextLimit(90, feedback("api-1", 10,
+                40.0, 70.0, 90.0, 0.01, 200));
+
+        assertEquals(ConcurrencyLimitDecision.Action.CLAMP, decision.action());
+        assertEquals(100, decision.nextLimit());
+        assertTrue(decision.reason().contains("max"));
+    }
+
+    @Test
     void limitNeverDropsBelowMinimum() {
         ConcurrencyLimitDecision decision = limiter.calculateNextLimit(3, feedback("api-1", 3,
                 80.0, 200.0, 280.0, 0.30, 200));
+
+        assertEquals(ConcurrencyLimitDecision.Action.CLAMP, decision.action());
+        assertEquals(2, decision.nextLimit());
+        assertTrue(decision.reason().contains("min"));
+    }
+
+    @Test
+    void currentLimitBelowMinimumClampsNextLimitSafely() {
+        ConcurrencyLimitDecision decision = limiter.calculateNextLimit(1, feedback("api-1", 1,
+                80.0, 200.0, 280.0, 0.30, 200));
+
+        assertEquals(ConcurrencyLimitDecision.Action.CLAMP, decision.action());
+        assertEquals(1, decision.previousLimit());
+        assertEquals(2, decision.nextLimit());
+        assertTrue(decision.reason().contains("min"));
+    }
+
+    @Test
+    void currentLimitExactlyMinimumCanIncreaseWhenTelemetryIsHealthy() {
+        ConcurrencyLimitDecision decision = limiter.calculateNextLimit(2, feedback("api-1", 1,
+                40.0, 70.0, 90.0, 0.01, 200));
+
+        assertEquals(ConcurrencyLimitDecision.Action.INCREASE, decision.action());
+        assertEquals(2, decision.previousLimit());
+        assertEquals(5, decision.nextLimit());
+        assertTrue(decision.nextLimit() >= decision.minLimit());
+    }
+
+    @Test
+    void decreaseRoundingBelowMinimumClampsToMinimum() {
+        ConcurrencyLimitDecision decision = limiter.calculateNextLimit(3, feedback("api-1", 3,
+                40.0, 200.0, 250.0, 0.01, 200));
+
+        assertEquals(ConcurrencyLimitDecision.Action.CLAMP, decision.action());
+        assertEquals(2, decision.nextLimit());
+        assertTrue(decision.reason().contains("min"));
+    }
+
+    @Test
+    void decreaseRoundingCanLandExactlyOnMinimum() {
+        ConcurrencyLimitDecision decision = limiter.calculateNextLimit(4, feedback("api-1", 3,
+                40.0, 200.0, 250.0, 0.01, 200));
+
+        assertEquals(ConcurrencyLimitDecision.Action.DECREASE, decision.action());
+        assertEquals(2, decision.nextLimit());
+        assertTrue(decision.nextLimit() >= decision.minLimit());
+    }
+
+    @Test
+    void decreaseFromSmallCurrentLimitNeverProducesZero() {
+        ConcurrencyLimitDecision decision = limiter.calculateNextLimit(1, feedback("api-1", 1,
+                40.0, 200.0, 250.0, 0.01, 200));
+
+        assertEquals(ConcurrencyLimitDecision.Action.CLAMP, decision.action());
+        assertEquals(2, decision.nextLimit());
+        assertTrue(decision.nextLimit() >= decision.minLimit());
+    }
+
+    @Test
+    void combinedDecreaseNearMinimumRemainsSafe() {
+        ConcurrencyLimitDecision decision = limiter.calculateNextLimit(2, feedback("api-1", 2,
+                40.0, 200.0, 250.0, 0.50, 200));
 
         assertEquals(ConcurrencyLimitDecision.Action.CLAMP, decision.action());
         assertEquals(2, decision.nextLimit());
@@ -93,6 +190,7 @@ class AdaptiveConcurrencyLimiterTest {
         assertEquals(ConcurrencyLimitDecision.Action.HOLD, decision.action());
         assertEquals(30, decision.nextLimit());
         assertTrue(decision.reason().contains("sample size"));
+        assertTrue(decision.reason().contains("below minimum"));
     }
 
     @Test
@@ -103,6 +201,7 @@ class AdaptiveConcurrencyLimiterTest {
         assertEquals(ConcurrencyLimitDecision.Action.HOLD, decision.action());
         assertEquals(30, decision.nextLimit());
         assertTrue(decision.reason().contains("sample size"));
+        assertTrue(decision.reason().contains("below minimum"));
     }
 
     @Test
