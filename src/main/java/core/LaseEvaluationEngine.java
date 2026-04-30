@@ -65,13 +65,18 @@ public final class LaseEvaluationEngine {
                 .collect(Collectors.joining(", "));
         return "Evaluation " + input.evaluationId()
                 + ": chosen server " + chosenServer
+                + " (" + routingDecision.explanation().reason() + ")"
                 + "; concurrency " + concurrencyDecision.action()
                 + " " + concurrencyDecision.previousLimit() + "->" + concurrencyDecision.nextLimit()
+                + " (" + concurrencyDecision.reason() + ")"
                 + "; load shedding " + loadSheddingDecision.action() + " for " + input.requestPriority()
+                + " (" + loadSheddingDecision.reason() + ")"
                 + "; autoscaling " + autoscalingRecommendation.action()
                 + " " + autoscalingRecommendation.currentCapacity()
                 + "->" + autoscalingRecommendation.recommendedCapacity()
+                + " (" + autoscalingRecommendation.reason() + ")"
                 + "; failure severity " + failureScenarioResult.severity()
-                + " with actions [" + failureActions + "].";
+                + " with actions [" + failureActions + "]"
+                + " (" + failureScenarioResult.reason() + ").";
     }
 }

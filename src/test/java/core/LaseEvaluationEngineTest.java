@@ -130,6 +130,102 @@ class LaseEvaluationEngineTest {
     }
 
     @Test
+    void inputBoundaryValidationRejectsNullCandidatesAndNegativeConcurrencyLimit() {
+        assertAll("input boundaries",
+                () -> assertInvalid(() -> input("null-candidates", RequestPriority.USER, null, 10,
+                        healthyFeedback(), normalSheddingSignal(), normalAutoscalingSignal(),
+                        normalFailureSignal(FailureScenarioType.TRAFFIC_SPIKE))),
+                () -> assertInvalid(() -> input("negative-limit", RequestPriority.USER, healthyCandidates(), -1,
+                        healthyFeedback(), normalSheddingSignal(), normalAutoscalingSignal(),
+                        normalFailureSignal(FailureScenarioType.TRAFFIC_SPIKE)))
+        );
+    }
+
+    @Test
+    void reportUsesDirectResultsFromComposedLaseComponents() {
+        LaseEvaluationInput input = overloadedInput();
+        TailLatencyPowerOfTwoStrategy routingStrategy =
+                new TailLatencyPowerOfTwoStrategy(new ServerScoreCalculator(), new Random(7), CLOCK);
+        LoadSheddingPolicy sheddingPolicy = new LoadSheddingPolicy();
+        ShadowAutoscaler autoscaler = new ShadowAutoscaler();
+        FailureScenarioRunner failureRunner = new FailureScenarioRunner();
+
+        LaseEvaluationReport report = new LaseEvaluationEngine(routingStrategy, sheddingPolicy, autoscaler,
+                failureRunner, CLOCK).evaluate(input, CONFIG);
+
+        assertEquals(new TailLatencyPowerOfTwoStrategy(new ServerScoreCalculator(), new Random(7), CLOCK)
+                .choose(input.serverCandidates()), report.routingDecision());
+        assertEquals(new AdaptiveConcurrencyLimiter(CONCURRENCY_CONFIG, CLOCK)
+                .calculateNextLimit(input.currentConcurrencyLimit(), input.concurrencyFeedback()),
+                report.concurrencyDecision());
+        assertEquals(sheddingPolicy.decide(input.requestPriority(), input.loadSheddingSignal(), SHEDDING_CONFIG),
+                report.loadSheddingDecision());
+        assertEquals(autoscaler.recommend(input.autoscalingSignal(), AUTOSCALER_CONFIG),
+                report.autoscalingRecommendation());
+        assertEquals(failureRunner.evaluate(input.failureScenarioSignal(), FAILURE_CONFIG),
+                report.failureScenarioResult());
+    }
+
+    @Test
+    void summaryIncludesOutcomesAndExplanationReasons() {
+        LaseEvaluationReport report = engine(7).evaluate(overloadedInput(), CONFIG);
+
+        assertTrue(report.summary().contains("overloaded"));
+        assertTrue(report.summary().contains("chosen server"));
+        assertTrue(report.summary().contains("DECREASE"));
+        assertTrue(report.summary().contains("SHED"));
+        assertTrue(report.summary().contains("SCALE_UP"));
+        assertTrue(report.summary().contains("HIGH"));
+        assertTrue(report.summary().contains("SHED_LOW_PRIORITY"));
+        assertTrue(report.summary().contains("SCALE_UP_SHADOW"));
+        assertTrue(report.summary().contains("p95 latency"));
+        assertTrue(report.summary().contains("overload pressure"));
+        assertTrue(report.summary().contains("scale-up pressure"));
+        assertTrue(report.summary().contains("Queue backlog pressure"));
+    }
+
+    @Test
+    void overloadedEvaluationAvoidsUnhealthyHighRiskRoutingCandidate() {
+        LaseEvaluationInput input = input("overloaded-routing", RequestPriority.PREFETCH,
+                List.of(unhealthyServer("server-fast-but-unhealthy"), slowerServer("server-slow"),
+                        healthyServer("server-healthy")),
+                20,
+                new ConcurrencyFeedback("server-healthy", 30, 260.0, 320.0, 480.0, 0.20, 100, NOW),
+                new LoadSheddingSignal("checkout", 38, 40, 30, 300.0, 0.20, NOW),
+                new AutoscalingSignal("checkout", 4, 2, 10, 38, 30, 300.0, 420.0, 0.05, 100, NOW),
+                new FailureScenarioSignal("queue-pressure", FailureScenarioType.QUEUE_BACKLOG, "checkout",
+                        4, 4, 38, 40, 30, 300.0, 420.0, 0.05, 100, NOW));
+
+        LaseEvaluationReport report = engine(7).evaluate(input, CONFIG);
+
+        assertTrue(report.routingDecision().chosenServer().isPresent());
+        assertNotEquals("server-fast-but-unhealthy", report.routingDecision().chosenServer().orElseThrow().serverId());
+        assertFalse(report.routingDecision().explanation().candidateServersConsidered()
+                .contains("server-fast-but-unhealthy"));
+        assertEquals(LoadSheddingDecision.Action.SHED, report.loadSheddingDecision().action());
+        assertEquals(AutoscalingAction.SCALE_UP, report.autoscalingRecommendation().action());
+        assertEquals(FailureSeverity.HIGH, report.failureScenarioResult().severity());
+        assertTrue(report.summary().contains("overload pressure"));
+    }
+
+    @Test
+    void lowSampleSummaryReflectsConservativeInsufficientSampleBehavior() {
+        LaseEvaluationInput input = input("low-sample", RequestPriority.USER, healthyCandidates(),
+                10,
+                new ConcurrencyFeedback("server-a", 20, 500.0, 500.0, 800.0, 0.90, 5, NOW),
+                normalSheddingSignal(),
+                new AutoscalingSignal("checkout", 4, 2, 10, 40, 40, 500.0, 800.0, 0.90, 5, NOW),
+                new FailureScenarioSignal("low-sample-failure", FailureScenarioType.PARTIAL_OUTAGE, "checkout",
+                        4, 0, 40, 40, 40, 500.0, 800.0, 0.90, 5, NOW));
+
+        LaseEvaluationReport report = engine(7).evaluate(input, CONFIG);
+
+        assertTrue(report.summary().contains("HOLD"));
+        assertTrue(report.summary().contains("LOW"));
+        assertTrue(report.summary().contains("insufficient sample"));
+    }
+
+    @Test
     void inputValidationRejectsMissingOrUnsafeFields() {
         assertAll("invalid input",
                 () -> assertInvalid(() -> input(null, RequestPriority.USER, healthyCandidates(), 10,
