@@ -42,4 +42,25 @@ class ProdCorsOverrideConfigurationTest {
                 .andExpect(header().string("Access-Control-Allow-Headers", containsString("Content-Type")))
                 .andExpect(header().string("Access-Control-Allow-Headers", containsString("X-API-Key")));
     }
+
+    @Test
+    void prodProfileAllowsProtectedMutationMethodsInCorsPreflightForConfiguredOrigin() throws Exception {
+        mockMvc.perform(options("/api/allocate/capacity-aware")
+                        .header("Origin", "https://app.example.com")
+                        .header("Access-Control-Request-Method", "PUT")
+                        .header("Access-Control-Request-Headers", "Content-Type,Authorization,X-API-Key"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "https://app.example.com"))
+                .andExpect(header().string("Access-Control-Allow-Methods", containsString("PUT")))
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("Authorization")));
+
+        mockMvc.perform(options("/api/allocate/capacity-aware")
+                        .header("Origin", "https://app.example.com")
+                        .header("Access-Control-Request-Method", "PATCH")
+                        .header("Access-Control-Request-Headers", "Content-Type,Authorization,X-API-Key"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "https://app.example.com"))
+                .andExpect(header().string("Access-Control-Allow-Methods", containsString("PATCH")))
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("Authorization")));
+    }
 }

@@ -184,6 +184,8 @@ public class LoadBalancerGUI extends Application {
             copyCloudFlag(systemProperties, environment, cloudProperties,
                     CloudConfig.ENVIRONMENT_PROPERTY, "CLOUD_ENVIRONMENT");
             copyCloudFlag(systemProperties, environment, cloudProperties,
+                    CloudConfig.RESOURCE_NAME_PREFIX_PROPERTY, "CLOUD_RESOURCE_NAME_PREFIX");
+            copyCloudFlag(systemProperties, environment, cloudProperties,
                     CloudConfig.ALLOWED_AWS_ACCOUNT_IDS_PROPERTY, "CLOUD_ALLOWED_AWS_ACCOUNT_IDS");
             copyCloudFlag(systemProperties, environment, cloudProperties,
                     CloudConfig.CURRENT_AWS_ACCOUNT_ID_PROPERTY, "CLOUD_CURRENT_AWS_ACCOUNT_ID");

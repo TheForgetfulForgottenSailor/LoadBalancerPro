@@ -12,12 +12,19 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.function.BiFunction;
+import java.util.regex.Pattern;
 
 public final class LaseShadowAdvisor {
     public static final String ENABLED_PROPERTY = "loadbalancerpro.lase.shadow.enabled";
     public static final String ENABLED_ENVIRONMENT_VARIABLE = "LOADBALANCERPRO_LASE_SHADOW_ENABLED";
 
     private static final Logger logger = LogManager.getLogger(LaseShadowAdvisor.class);
+    private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\r\\n\\t]+");
+    private static final Pattern BEARER_VALUE = Pattern.compile("(?i)\\bbearer\\s+[A-Za-z0-9._~+\\-/]+=*");
+    private static final Pattern SENSITIVE_KEY_VALUE = Pattern.compile(
+            "(?i)\\b(api[-_ ]?key|access[-_ ]?key|secret|token|password|credential|bearer[-_ ]?secret)\\b\\s*[:=]\\s*[^\\s,;]+");
+    private static final Pattern SENSITIVE_WORD_VALUE = Pattern.compile(
+            "(?i)\\b(api[-_ ]?key|access[-_ ]?key|secret|token|password|credential|bearer[-_ ]?secret)[-_][A-Za-z0-9._~+\\-/=]+");
 
     private final boolean enabled;
     private final BiFunction<LaseEvaluationInput, LaseEvaluationConfig, LaseEvaluationReport> evaluator;
@@ -110,8 +117,9 @@ public final class LaseShadowAdvisor {
             logger.debug("LASE shadow report {}: {}", report.evaluationId(), report.summary());
             return Optional.of(report);
         } catch (RuntimeException e) {
-            recordFailSafe(strategyName, requestedLoad, distributionResult, now, e);
-            logger.warn("LASE shadow advisor skipped evaluation: {}", e.getMessage());
+            String failureReason = safeFailureReason(e);
+            recordFailSafe(strategyName, requestedLoad, distributionResult, now, failureReason);
+            logger.warn("LASE shadow advisor skipped evaluation: {}", failureReason);
             return Optional.empty();
         }
     }
@@ -152,7 +160,7 @@ public final class LaseShadowAdvisor {
                                 double requestedLoad,
                                 LoadDistributionResult distributionResult,
                                 Instant timestamp,
-                                RuntimeException exception) {
+                                String failureReason) {
         eventLog.record(new LaseShadowEvent(
                 evaluationId(strategyName),
                 timestamp,
@@ -168,7 +176,7 @@ public final class LaseShadowAdvisor {
                 "LASE shadow evaluation failed safely",
                 null,
                 true,
-                safeFailureReason(exception)));
+                failureReason));
     }
 
     private String actualSelectedServerId(LoadDistributionResult distributionResult) {
@@ -210,7 +218,11 @@ public final class LaseShadowAdvisor {
         if (message == null || message.isBlank()) {
             return "shadow evaluation failed safely";
         }
-        return message.replaceAll("[\\r\\n\\t]+", " ").trim();
+        String sanitized = CONTROL_CHARACTERS.matcher(message).replaceAll(" ").trim();
+        sanitized = BEARER_VALUE.matcher(sanitized).replaceAll("Bearer [redacted]");
+        sanitized = SENSITIVE_KEY_VALUE.matcher(sanitized).replaceAll("$1=[redacted]");
+        sanitized = SENSITIVE_WORD_VALUE.matcher(sanitized).replaceAll("$1-[redacted]");
+        return sanitized.isBlank() ? "shadow evaluation failed safely" : sanitized;
     }
 
     private LaseEvaluationInput buildInput(String strategyName,

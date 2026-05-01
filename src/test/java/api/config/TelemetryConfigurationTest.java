@@ -38,6 +38,19 @@ class TelemetryConfigurationTest {
     }
 
     @Test
+    void otlpEnabledWithMalformedEndpointFailsStartup() {
+        contextRunner.withPropertyValues(
+                        "management.otlp.metrics.export.enabled=true",
+                        "management.otlp.metrics.export.url=http://[bad/v1/metrics")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(rootCause(context.getStartupFailure()))
+                            .isInstanceOf(IllegalStateException.class)
+                            .hasMessageContaining("valid URI");
+                });
+    }
+
+    @Test
     void otlpEnabledWithLocalhostEndpointPassesWhenLocalhostAllowed() {
         contextRunner.withPropertyValues(
                         "management.otlp.metrics.export.enabled=true",
@@ -120,6 +133,19 @@ class TelemetryConfigurationTest {
                             .isInstanceOf(IllegalStateException.class)
                             .hasMessageContaining("must not include credentials")
                             .hasMessageContaining("query strings");
+                });
+    }
+
+    @Test
+    void otlpEnabledWithFragmentEndpointFailsStartup() {
+        contextRunner.withPropertyValues(
+                        "management.otlp.metrics.export.enabled=true",
+                        "management.otlp.metrics.export.url=https://collector.internal/v1/metrics#token=abc")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(rootCause(context.getStartupFailure()))
+                            .isInstanceOf(IllegalStateException.class)
+                            .hasMessageContaining("fragments");
                 });
     }
 

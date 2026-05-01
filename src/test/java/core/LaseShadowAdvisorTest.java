@@ -119,6 +119,28 @@ class LaseShadowAdvisorTest {
     }
 
     @Test
+    void advisorRedactsSensitiveFailureReasonBeforeStoringShadowEvent() {
+        LaseShadowEventLog eventLog = new LaseShadowEventLog(10);
+        LaseShadowAdvisor advisor = new LaseShadowAdvisor(true, (input, config) -> {
+            throw new IllegalStateException(
+                    "token=raw-token api-key=raw-api-key Bearer raw-bearer-secret credential:raw-credential\nnext");
+        }, CLOCK, eventLog);
+
+        Optional<LaseEvaluationReport> report = advisor.observe(
+                "CAPACITY_AWARE", servers(), 60.0,
+                new LoadDistributionResult(Map.of("S1", 25.0), 0.0));
+
+        assertTrue(report.isEmpty());
+        String failureReason = eventLog.snapshot().recentEvents().get(0).failureReason();
+        assertTrue(failureReason.contains("[redacted]"));
+        assertFalse(failureReason.contains("raw-token"));
+        assertFalse(failureReason.contains("raw-api-key"));
+        assertFalse(failureReason.contains("raw-bearer-secret"));
+        assertFalse(failureReason.contains("raw-credential"));
+        assertFalse(failureReason.contains("\n"));
+    }
+
+    @Test
     void advisorFailsSafelyWhenDistributionResultIsMissing() {
         Optional<LaseEvaluationReport> report = deterministicAdvisor(true)
                 .observe("CAPACITY_AWARE", servers(), 60.0, null);
