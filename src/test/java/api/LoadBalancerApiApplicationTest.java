@@ -10,6 +10,7 @@ class LoadBalancerApiApplicationTest {
     void laseDemoFlagSkipsApiServerStartup() {
         assertFalse(LoadBalancerApiApplication.shouldStartApi(new String[]{"--lase-demo"}));
         assertFalse(LoadBalancerApiApplication.shouldStartApi(new String[]{"--lase-demo=healthy"}));
+        assertFalse(LoadBalancerApiApplication.shouldStartApi(new String[]{"--lase-replay=shadow-events.jsonl"}));
         assertTrue(LoadBalancerApiApplication.shouldStartApi(new String[]{"--server.port=18080"}));
         assertTrue(LoadBalancerApiApplication.shouldStartApi(new String[]{}));
     }

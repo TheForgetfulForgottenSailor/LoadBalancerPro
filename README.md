@@ -48,7 +48,7 @@ Roadmap backlog:
 - CSV/JSON handling validates schemas, handles robust CSV quoting, rejects malformed records, and neutralizes spreadsheet formula injection.
 - API hardening includes request-size enforcement, safe JSON error envelopes, validation response consistency, CORS coverage, and security headers.
 - Concurrency and lifecycle cleanup removed unsafe shared hashing state, bounded cache risk, and clarified CLI monitor shutdown ownership.
-- The default Maven test suite currently covers 371 tests with zero skipped tests and uses mocked cloud clients for cloud-adjacent coverage.
+- The default Maven test suite currently covers 402 tests with zero skipped tests and uses mocked cloud clients for cloud-adjacent coverage.
 - CI release gates verify tests, packaging, packaged-JAR smoke startup, dependency review on pull requests, and Docker image builds.
 - Docker runtime hardening runs the app as a non-root user and exposes a Docker healthcheck backed by `/api/health`.
 - The internal LASE telemetry-driven routing foundation models server state, scores tail-latency and pressure signals, samples candidates deterministically in tests, and emits explainable routing decisions.
@@ -272,6 +272,39 @@ Summary:
 ```
 
 This command demonstrates the internal LASE control-plane lab: telemetry-driven routing decisions, adaptive concurrency, load shedding, shadow autoscaling, failure scenario evaluation, and a consolidated explanation report. It does not claim production autoscaling, production chaos engineering, production cloud load-balancing behavior, or live AWS integration.
+
+## Offline LASE Replay Lab
+
+Saved LASE shadow events can be replayed locally from JSON Lines without starting the API server:
+
+```bash
+mvn package
+java -jar target/LoadBalancerPro-1.0.0-rc4.jar --lase-replay=shadow-events.jsonl
+```
+
+Replay mode is offline, read-only, and deterministic for a fixed input file. It does not change routing, does not call `CloudManager`, does not touch AWS resources, does not parse PCAP files, does not use Wireshark, does not open sockets, and does not require network access or AWS credentials. It evaluates previously saved shadow-observability records only; it is not a durable production telemetry store.
+
+Replay input uses schema-versioned JSON Lines with one record per line:
+
+```json
+{"schemaVersion":1,"event":{"evaluationId":"lase-shadow-capacity-aware","timestamp":"2026-04-30T12:00:00Z","strategy":"CAPACITY_AWARE","requestedLoad":50.0,"unallocatedLoad":0.0,"actualSelectedServerId":"api-1","recommendedServerId":"api-1","recommendedAction":"HOLD","decisionScore":42.0,"networkAwarenessSignal":{"targetId":"api-1","timeoutRate":0.0,"retryRate":0.0,"connectionFailureRate":0.0,"latencyJitterMillis":0.0,"recentErrorBurst":false,"requestTimeoutCount":0,"sampleSize":0,"timestamp":"2026-04-30T12:00:00Z"},"networkRiskScore":0.0,"reason":"Evaluation completed","agreedWithRouting":true,"failSafe":false,"failureReason":null}}
+```
+
+The replay report includes:
+
+| Metric | Meaning |
+| --- | --- |
+| Total events | Number of JSONL shadow records processed. |
+| Comparable events | Events where normal routing and LASE recommendation can be compared. |
+| Agreement rate | Comparable events where the LASE recommended server matches the observed selected server. |
+| Fail-safe rate | Share of events marked as safe shadow-evaluation failures. |
+| Recommendation counts | Counts by LASE recommended action, such as `HOLD`, `SCALE_UP`, or `FAIL_SAFE`. |
+| Decision score summary | Min/average/max of recorded decision scores when present. |
+| Network risk summary | Min/average/max of recorded network risk scores when present. |
+| Network signal summary | Average timeout/retry/connection-failure rates, max latency jitter, recent error bursts, and total request timeouts. |
+| Time range | First and latest event timestamps in the replay file. |
+
+Malformed JSON, unsupported schema versions, missing files, and overlong input lines fail safely with a nonzero exit code and line-numbered guidance. The command does not print raw malformed input or stack traces for expected user-input errors.
 
 ## Continuous Integration
 

@@ -1,6 +1,7 @@
 package api;
 
 import cli.LaseDemoCommand;
+import cli.LaseReplayCommand;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -8,6 +9,13 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class LoadBalancerApiApplication {
     public static void main(String[] args) {
         if (!shouldStartApi(args)) {
+            LaseReplayCommand.Result replayResult = LaseReplayCommand.runIfRequested(args, System.out, System.err);
+            if (replayResult.requested()) {
+                if (replayResult.exitCode() != 0) {
+                    System.exit(replayResult.exitCode());
+                }
+                return;
+            }
             LaseDemoCommand.Result demoResult = LaseDemoCommand.runIfRequested(args, System.out, System.err);
             if (demoResult.exitCode() != 0) {
                 System.exit(demoResult.exitCode());
@@ -18,6 +26,6 @@ public class LoadBalancerApiApplication {
     }
 
     static boolean shouldStartApi(String[] args) {
-        return !LaseDemoCommand.isRequested(args);
+        return !LaseDemoCommand.isRequested(args) && !LaseReplayCommand.isRequested(args);
     }
 }
