@@ -10,6 +10,12 @@ public final class ServerScoreCalculator {
     private static final double IN_FLIGHT_RATIO_WEIGHT = 100.0;
     private static final double QUEUE_RATIO_WEIGHT = 100.0;
     private static final double ERROR_RATE_WEIGHT = 1_000.0;
+    private static final double TIMEOUT_RATE_WEIGHT = 800.0;
+    private static final double RETRY_RATE_WEIGHT = 350.0;
+    private static final double CONNECTION_FAILURE_RATE_WEIGHT = 900.0;
+    private static final double LATENCY_JITTER_WEIGHT = 0.50;
+    private static final double RECENT_ERROR_BURST_PENALTY = 250.0;
+    private static final double REQUEST_TIMEOUT_COUNT_WEIGHT = 20.0;
 
     public double score(ServerStateVector state) {
         Objects.requireNonNull(state, "state cannot be null");
@@ -21,8 +27,19 @@ public final class ServerScoreCalculator {
                 + (state.averageLatencyMillis() * AVERAGE_LATENCY_WEIGHT)
                 + (inFlightRatio * IN_FLIGHT_RATIO_WEIGHT)
                 + (queueRatio * QUEUE_RATIO_WEIGHT)
-                + (state.recentErrorRate() * ERROR_RATE_WEIGHT);
+                + (state.recentErrorRate() * ERROR_RATE_WEIGHT)
+                + networkRiskScore(state.networkAwarenessSignal());
         return state.healthy() ? score : score + UNHEALTHY_PENALTY;
+    }
+
+    public double networkRiskScore(NetworkAwarenessSignal signal) {
+        Objects.requireNonNull(signal, "signal cannot be null");
+        return (signal.timeoutRate() * TIMEOUT_RATE_WEIGHT)
+                + (signal.retryRate() * RETRY_RATE_WEIGHT)
+                + (signal.connectionFailureRate() * CONNECTION_FAILURE_RATE_WEIGHT)
+                + (signal.latencyJitterMillis() * LATENCY_JITTER_WEIGHT)
+                + (signal.recentErrorBurst() ? RECENT_ERROR_BURST_PENALTY : 0.0)
+                + (signal.requestTimeoutCount() * REQUEST_TIMEOUT_COUNT_WEIGHT);
     }
 
     private double capacityBasis(ServerStateVector state) {

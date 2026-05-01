@@ -5,6 +5,9 @@ import core.RoutingDecisionExplanation;
 import core.ServerScoreCalculator;
 import core.ServerStateVector;
 import core.TailLatencyPowerOfTwoStrategy;
+import core.NetworkAwarenessSignal;
+import core.LoadBalancer;
+import core.LoadDistributionResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 
@@ -40,8 +43,12 @@ class ServerTelemetryRoutingTest {
                 () -> assertInvalid("null queue depth optional",
                         () -> canonicalState("server", true, 0, OptionalDouble.of(100.0), OptionalDouble.of(100.0),
                                 1.0, 2.0, 3.0, 0.0, null, NOW)),
+                () -> assertInvalid("null network awareness signal",
+                        () -> canonicalState("server", true, 0, OptionalDouble.of(100.0), OptionalDouble.of(100.0),
+                                1.0, 2.0, 3.0, 0.0, OptionalInt.of(0), null, NOW)),
                 () -> assertInvalid("null timestamp",
-                        () -> state("server", true, 0, 100.0, 100.0, 1.0, 2.0, 3.0, 0.0, 0, null)),
+                        () -> state("server", true, 0, 100.0, 100.0, 1.0, 2.0, 3.0, 0.0, 0,
+                                (Instant) null)),
                 () -> assertInvalid("negative in-flight count",
                         () -> state("server", true, -1, 100.0, 100.0, 1.0, 2.0, 3.0, 0.0, 0)),
                 () -> assertInvalid("negative configured capacity",
@@ -155,6 +162,74 @@ class ServerTelemetryRoutingTest {
                 30.0, 60.0, 90.0, 0.40, 1);
 
         assertTrue(scoreCalculator.score(highErrorRate) > scoreCalculator.score(lowErrorRate));
+    }
+
+    @Test
+    void neutralNetworkSignalDoesNotChangeScoreComparedWithCompatibilityConstructor() {
+        ServerStateVector compatibilityState = state("server", true, 10, 100.0, 100.0,
+                30.0, 60.0, 90.0, 0.01, 1);
+        ServerStateVector explicitNeutral = state("server", true, 10, 100.0, 100.0,
+                30.0, 60.0, 90.0, 0.01, 1, NetworkAwarenessSignal.neutral("server", NOW));
+
+        assertEquals(scoreCalculator.score(compatibilityState), scoreCalculator.score(explicitNeutral), 0.0);
+        assertEquals(0.0, scoreCalculator.networkRiskScore(explicitNeutral.networkAwarenessSignal()), 0.0);
+    }
+
+    @Test
+    void networkAwarenessSignalsIncreaseShadowRiskScore() {
+        ServerStateVector baseline = state("server", true, 10, 100.0, 100.0,
+                30.0, 60.0, 90.0, 0.01, 1);
+        ServerStateVector networkRisk = state("server", true, 10, 100.0, 100.0,
+                30.0, 60.0, 90.0, 0.01, 1,
+                new NetworkAwarenessSignal("server", 0.20, 0.30, 0.10, 50.0, true, 4, 100, NOW));
+
+        assertTrue(scoreCalculator.networkRiskScore(networkRisk.networkAwarenessSignal()) > 0.0);
+        assertTrue(scoreCalculator.score(networkRisk) > scoreCalculator.score(baseline));
+    }
+
+    @Test
+    void eachNetworkAwarenessSignalContributesToScore() {
+        ServerStateVector baseline = state("server", true, 10, 100.0, 100.0,
+                30.0, 60.0, 90.0, 0.01, 1);
+        double baselineScore = scoreCalculator.score(baseline);
+
+        assertAll("network signal score contributions",
+                () -> assertSignalRaisesScore(baselineScore, networkSignal(0.10, 0.0, 0.0, 0.0, false, 0)),
+                () -> assertSignalRaisesScore(baselineScore, networkSignal(0.0, 0.10, 0.0, 0.0, false, 0)),
+                () -> assertSignalRaisesScore(baselineScore, networkSignal(0.0, 0.0, 0.10, 0.0, false, 0)),
+                () -> assertSignalRaisesScore(baselineScore, networkSignal(0.0, 0.0, 0.0, 25.0, false, 0)),
+                () -> assertSignalRaisesScore(baselineScore, networkSignal(0.0, 0.0, 0.0, 0.0, true, 0)),
+                () -> assertSignalRaisesScore(baselineScore, networkSignal(0.0, 0.0, 0.0, 0.0, false, 2))
+        );
+    }
+
+    @Test
+    void networkRiskCanChangeShadowRecommendationWithoutChangingLiveAllocation() {
+        ServerStateVector networkHealthy = state("network-healthy", true, 20, 100.0, 100.0,
+                30.0, 60.0, 90.0, 0.01, 1, NetworkAwarenessSignal.neutral("network-healthy", NOW));
+        ServerStateVector networkRisky = state("network-risky", true, 20, 100.0, 100.0,
+                30.0, 60.0, 90.0, 0.01, 1,
+                new NetworkAwarenessSignal("network-risky", 0.30, 0.20, 0.15, 80.0, true, 5, 100, NOW));
+
+        RoutingDecision decision = new TailLatencyPowerOfTwoStrategy(scoreCalculator, new Random(1), FIXED_CLOCK)
+                .choose(List.of(networkHealthy, networkRisky));
+
+        assertEquals("network-healthy", decision.chosenServer().orElseThrow().serverId());
+        assertTrue(decision.explanation().scores().get("network-risky")
+                > decision.explanation().scores().get("network-healthy"));
+
+        LoadBalancer baseline = balancerForAllocationRegression(false);
+        LoadBalancer observed = balancerForAllocationRegression(true);
+        try {
+            LoadDistributionResult expected = baseline.capacityAwareWithResult(60.0);
+            LoadDistributionResult actual = observed.capacityAwareWithResult(60.0);
+
+            assertEquals(expected.allocations(), actual.allocations());
+            assertEquals(expected.unallocatedLoad(), actual.unallocatedLoad(), 0.01);
+        } finally {
+            baseline.shutdown();
+            observed.shutdown();
+        }
     }
 
     @Test
@@ -330,7 +405,68 @@ class ServerTelemetryRoutingTest {
                                              double recentErrorRate,
                                              OptionalInt queueDepth,
                                              Instant timestamp) {
+        return canonicalState(id, healthy, inFlight, configuredCapacity, estimatedConcurrencyLimit,
+                averageLatencyMillis, p95LatencyMillis, p99LatencyMillis, recentErrorRate, queueDepth,
+                NetworkAwarenessSignal.neutral(id, timestamp), timestamp);
+    }
+
+    private ServerStateVector canonicalState(String id,
+                                             boolean healthy,
+                                             int inFlight,
+                                             OptionalDouble configuredCapacity,
+                                             OptionalDouble estimatedConcurrencyLimit,
+                                             double averageLatencyMillis,
+                                             double p95LatencyMillis,
+                                             double p99LatencyMillis,
+                                             double recentErrorRate,
+                                             OptionalInt queueDepth,
+                                             NetworkAwarenessSignal networkAwarenessSignal,
+                                             Instant timestamp) {
         return new ServerStateVector(id, healthy, inFlight, configuredCapacity, estimatedConcurrencyLimit,
-                averageLatencyMillis, p95LatencyMillis, p99LatencyMillis, recentErrorRate, queueDepth, timestamp);
+                averageLatencyMillis, p95LatencyMillis, p99LatencyMillis, recentErrorRate, queueDepth,
+                networkAwarenessSignal, timestamp);
+    }
+
+    private ServerStateVector state(String id,
+                                    boolean healthy,
+                                    int inFlight,
+                                    double configuredCapacity,
+                                    double estimatedConcurrencyLimit,
+                                    double averageLatencyMillis,
+                                    double p95LatencyMillis,
+                                    double p99LatencyMillis,
+                                    double recentErrorRate,
+                                    int queueDepth,
+                                    NetworkAwarenessSignal networkAwarenessSignal) {
+        return new ServerStateVector(id, healthy, inFlight, configuredCapacity, estimatedConcurrencyLimit,
+                averageLatencyMillis, p95LatencyMillis, p99LatencyMillis, recentErrorRate, queueDepth,
+                networkAwarenessSignal, NOW);
+    }
+
+    private void assertSignalRaisesScore(double baselineScore, NetworkAwarenessSignal signal) {
+        ServerStateVector state = state("server", true, 10, 100.0, 100.0,
+                30.0, 60.0, 90.0, 0.01, 1, signal);
+        assertTrue(scoreCalculator.score(state) > baselineScore);
+    }
+
+    private NetworkAwarenessSignal networkSignal(double timeoutRate,
+                                                 double retryRate,
+                                                 double connectionFailureRate,
+                                                 double latencyJitterMillis,
+                                                 boolean recentErrorBurst,
+                                                 int requestTimeoutCount) {
+        return new NetworkAwarenessSignal("server", timeoutRate, retryRate, connectionFailureRate,
+                latencyJitterMillis, recentErrorBurst, requestTimeoutCount, 100, NOW);
+    }
+
+    private LoadBalancer balancerForAllocationRegression(boolean shadowEnabled) {
+        LoadBalancer balancer = new LoadBalancer(shadowEnabled);
+        core.Server first = new core.Server("S1", 20.0, 20.0, 20.0);
+        first.setCapacity(80.0);
+        core.Server second = new core.Server("S2", 10.0, 10.0, 10.0);
+        second.setCapacity(100.0);
+        balancer.addServer(first);
+        balancer.addServer(second);
+        return balancer;
     }
 }

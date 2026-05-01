@@ -16,6 +16,7 @@ public record ServerStateVector(
         double p99LatencyMillis,
         double recentErrorRate,
         OptionalInt queueDepth,
+        NetworkAwarenessSignal networkAwarenessSignal,
         Instant timestamp) {
 
     public ServerStateVector {
@@ -23,6 +24,7 @@ public record ServerStateVector(
         Objects.requireNonNull(configuredCapacity, "configuredCapacity cannot be null");
         Objects.requireNonNull(estimatedConcurrencyLimit, "estimatedConcurrencyLimit cannot be null");
         Objects.requireNonNull(queueDepth, "queueDepth cannot be null");
+        Objects.requireNonNull(networkAwarenessSignal, "networkAwarenessSignal cannot be null");
         Objects.requireNonNull(timestamp, "timestamp cannot be null");
         requireNonNegative(inFlightRequestCount, "inFlightRequestCount");
         configuredCapacity.ifPresent(value -> requireNonNegative(value, "configuredCapacity"));
@@ -32,6 +34,22 @@ public record ServerStateVector(
         requireNonNegative(p99LatencyMillis, "p99LatencyMillis");
         requireRate(recentErrorRate, "recentErrorRate");
         queueDepth.ifPresent(value -> requireNonNegative(value, "queueDepth"));
+    }
+
+    public ServerStateVector(String serverId,
+                             boolean healthy,
+                             int inFlightRequestCount,
+                             OptionalDouble configuredCapacity,
+                             OptionalDouble estimatedConcurrencyLimit,
+                             double averageLatencyMillis,
+                             double p95LatencyMillis,
+                             double p99LatencyMillis,
+                             double recentErrorRate,
+                             OptionalInt queueDepth,
+                             Instant timestamp) {
+        this(serverId, healthy, inFlightRequestCount, configuredCapacity, estimatedConcurrencyLimit,
+                averageLatencyMillis, p95LatencyMillis, p99LatencyMillis, recentErrorRate, queueDepth,
+                NetworkAwarenessSignal.neutral(serverId, timestamp), timestamp);
     }
 
     public ServerStateVector(String serverId,
@@ -47,7 +65,25 @@ public record ServerStateVector(
                              Instant timestamp) {
         this(serverId, healthy, inFlightRequestCount, OptionalDouble.of(configuredCapacity),
                 OptionalDouble.of(estimatedConcurrencyLimit), averageLatencyMillis, p95LatencyMillis,
-                p99LatencyMillis, recentErrorRate, OptionalInt.of(queueDepth), timestamp);
+                p99LatencyMillis, recentErrorRate, OptionalInt.of(queueDepth),
+                NetworkAwarenessSignal.neutral(serverId, timestamp), timestamp);
+    }
+
+    public ServerStateVector(String serverId,
+                             boolean healthy,
+                             int inFlightRequestCount,
+                             double configuredCapacity,
+                             double estimatedConcurrencyLimit,
+                             double averageLatencyMillis,
+                             double p95LatencyMillis,
+                             double p99LatencyMillis,
+                             double recentErrorRate,
+                             int queueDepth,
+                             NetworkAwarenessSignal networkAwarenessSignal,
+                             Instant timestamp) {
+        this(serverId, healthy, inFlightRequestCount, OptionalDouble.of(configuredCapacity),
+                OptionalDouble.of(estimatedConcurrencyLimit), averageLatencyMillis, p95LatencyMillis,
+                p99LatencyMillis, recentErrorRate, OptionalInt.of(queueDepth), networkAwarenessSignal, timestamp);
     }
 
     public static ServerStateVector fromServer(Server server,
@@ -61,7 +97,8 @@ public record ServerStateVector(
         Objects.requireNonNull(server, "server cannot be null");
         return new ServerStateVector(server.getServerId(), server.isHealthy(), inFlightRequestCount,
                 OptionalDouble.of(server.getCapacity()), OptionalDouble.empty(), averageLatencyMillis,
-                p95LatencyMillis, p99LatencyMillis, recentErrorRate, OptionalInt.of(queueDepth), timestamp);
+                p95LatencyMillis, p99LatencyMillis, recentErrorRate, OptionalInt.of(queueDepth),
+                NetworkAwarenessSignal.neutral(server.getServerId(), timestamp), timestamp);
     }
 
     private static String requireNonBlank(String value, String fieldName) {
