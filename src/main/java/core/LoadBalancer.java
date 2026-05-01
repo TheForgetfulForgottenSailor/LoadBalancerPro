@@ -51,6 +51,11 @@ public class LoadBalancer {
                 new LaseShadowAdvisor(laseShadowEnabled));
     }
 
+    public LoadBalancer(boolean laseShadowEnabled, LaseShadowEventLog laseShadowEventLog) {
+        this(DEFAULT_MAX_USAGE_THRESHOLD, DEFAULT_HASH_REPLICAS, DEFAULT_PREDICTIVE_LOAD_FACTOR,
+                new LaseShadowAdvisor(laseShadowEnabled, laseShadowEventLog));
+    }
+
     private LoadBalancer(double maxUsageThreshold,
                          int hashReplicas,
                          double predictiveLoadFactor,

@@ -22,22 +22,42 @@ public final class LaseShadowAdvisor {
     private final boolean enabled;
     private final BiFunction<LaseEvaluationInput, LaseEvaluationConfig, LaseEvaluationReport> evaluator;
     private final Clock clock;
+    private final LaseShadowEventLog eventLog;
     private volatile LaseEvaluationReport lastReport;
 
     public LaseShadowAdvisor(boolean enabled) {
-        this(enabled, defaultEngine(Clock.systemUTC()), Clock.systemUTC());
+        this(enabled, defaultEngine(Clock.systemUTC()), Clock.systemUTC(), new LaseShadowEventLog());
+    }
+
+    public LaseShadowAdvisor(boolean enabled, LaseShadowEventLog eventLog) {
+        this(enabled, defaultEngine(Clock.systemUTC()), Clock.systemUTC(), eventLog);
     }
 
     public LaseShadowAdvisor(boolean enabled, LaseEvaluationEngine engine, Clock clock) {
-        this(enabled, Objects.requireNonNull(engine, "engine cannot be null")::evaluate, clock);
+        this(enabled, engine, clock, new LaseShadowEventLog());
+    }
+
+    public LaseShadowAdvisor(boolean enabled,
+                             LaseEvaluationEngine engine,
+                             Clock clock,
+                             LaseShadowEventLog eventLog) {
+        this(enabled, Objects.requireNonNull(engine, "engine cannot be null")::evaluate, clock, eventLog);
     }
 
     LaseShadowAdvisor(boolean enabled,
                       BiFunction<LaseEvaluationInput, LaseEvaluationConfig, LaseEvaluationReport> evaluator,
                       Clock clock) {
+        this(enabled, evaluator, clock, new LaseShadowEventLog());
+    }
+
+    LaseShadowAdvisor(boolean enabled,
+                      BiFunction<LaseEvaluationInput, LaseEvaluationConfig, LaseEvaluationReport> evaluator,
+                      Clock clock,
+                      LaseShadowEventLog eventLog) {
         this.enabled = enabled;
         this.evaluator = Objects.requireNonNull(evaluator, "evaluator cannot be null");
         this.clock = Objects.requireNonNull(clock, "clock cannot be null");
+        this.eventLog = Objects.requireNonNull(eventLog, "eventLog cannot be null");
     }
 
     public static LaseShadowAdvisor disabled() {
@@ -60,6 +80,10 @@ public final class LaseShadowAdvisor {
         return Optional.ofNullable(lastReport);
     }
 
+    public LaseShadowObservabilitySnapshot observabilitySnapshot() {
+        return eventLog.snapshot();
+    }
+
     public Optional<LaseEvaluationReport> observe(String strategyName,
                                                   List<Server> currentServers,
                                                   double requestedLoad,
@@ -76,18 +100,102 @@ public final class LaseShadowAdvisor {
             return Optional.empty();
         }
 
+        Instant now = Instant.now(clock);
         try {
-            Instant now = Instant.now(clock);
             LaseEvaluationInput input = buildInput(strategyName, currentServers, requestedLoad,
                     distributionResult, now);
             LaseEvaluationReport report = evaluator.apply(input, defaultConfig());
             lastReport = report;
+            recordSuccess(strategyName, requestedLoad, distributionResult, report);
             logger.debug("LASE shadow report {}: {}", report.evaluationId(), report.summary());
             return Optional.of(report);
         } catch (RuntimeException e) {
+            recordFailSafe(strategyName, requestedLoad, distributionResult, now, e);
             logger.warn("LASE shadow advisor skipped evaluation: {}", e.getMessage());
             return Optional.empty();
         }
+    }
+
+    private void recordSuccess(String strategyName,
+                               double requestedLoad,
+                               LoadDistributionResult distributionResult,
+                               LaseEvaluationReport report) {
+        String actualServerId = actualSelectedServerId(distributionResult);
+        String recommendedServerId = recommendedServerId(report);
+        Boolean agreed = actualServerId != null && recommendedServerId != null
+                ? actualServerId.equals(recommendedServerId)
+                : null;
+        Double decisionScore = recommendedServerId == null
+                ? null
+                : report.routingDecision().explanation().scores().get(recommendedServerId);
+
+        eventLog.record(new LaseShadowEvent(
+                report.evaluationId(),
+                report.timestamp(),
+                safeStrategyName(strategyName),
+                sanitizeNonNegative(requestedLoad),
+                distributionResult.unallocatedLoad(),
+                actualServerId,
+                recommendedServerId,
+                report.autoscalingRecommendation().action().name(),
+                decisionScore,
+                report.summary(),
+                agreed,
+                false,
+                null));
+    }
+
+    private void recordFailSafe(String strategyName,
+                                double requestedLoad,
+                                LoadDistributionResult distributionResult,
+                                Instant timestamp,
+                                RuntimeException exception) {
+        eventLog.record(new LaseShadowEvent(
+                evaluationId(strategyName),
+                timestamp,
+                safeStrategyName(strategyName),
+                sanitizeNonNegative(requestedLoad),
+                distributionResult == null ? 0.0 : distributionResult.unallocatedLoad(),
+                distributionResult == null ? null : actualSelectedServerId(distributionResult),
+                null,
+                "FAIL_SAFE",
+                null,
+                "LASE shadow evaluation failed safely",
+                null,
+                true,
+                safeFailureReason(exception)));
+    }
+
+    private String actualSelectedServerId(LoadDistributionResult distributionResult) {
+        return distributionResult.allocations().entrySet().stream()
+                .filter(entry -> entry.getValue() != null && entry.getValue() > 0.0)
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed()
+                        .thenComparing(Map.Entry.comparingByKey()))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String recommendedServerId(LaseEvaluationReport report) {
+        return report.routingDecision().explanation().chosenServerId()
+                .or(() -> report.routingDecision().chosenServer().map(ServerStateVector::serverId))
+                .orElse(null);
+    }
+
+    private String safeStrategyName(String strategyName) {
+        return strategyName == null || strategyName.isBlank() ? "UNKNOWN" : strategyName.trim();
+    }
+
+    private double sanitizeNonNegative(double value) {
+        return Double.isFinite(value) && value > 0.0 ? value : 0.0;
+    }
+
+    private String safeFailureReason(RuntimeException exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) {
+            return "shadow evaluation failed safely";
+        }
+        return message.replaceAll("[\\r\\n\\t]+", " ").trim();
     }
 
     private LaseEvaluationInput buildInput(String strategyName,

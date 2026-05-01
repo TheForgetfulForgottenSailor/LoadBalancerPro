@@ -96,6 +96,24 @@ class ProdApiKeyProtectionTest {
     }
 
     @Test
+    void prodProfileProtectsLaseShadowObservabilityWithoutApiKey() throws Exception {
+        mockMvc.perform(get("/api/lase/shadow"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.error", is("unauthorized")))
+                .andExpect(jsonPath("$.path", is("/api/lase/shadow")));
+    }
+
+    @Test
+    void prodProfileAllowsLaseShadowObservabilityWithCorrectApiKey() throws Exception {
+        mockMvc.perform(get("/api/lase/shadow").header("X-API-Key", API_KEY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.totalEvaluations").isNumber())
+                .andExpect(jsonPath("$.recentEvents").isArray());
+    }
+
+    @Test
     void prodProfileKeepsOpenApiDocsPublic() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())

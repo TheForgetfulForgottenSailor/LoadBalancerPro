@@ -46,7 +46,7 @@ public class ProdApiKeyFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        if (!isProtectedApiMutation(request)) {
+        if (!isProtectedApiRequest(request)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -67,10 +67,18 @@ public class ProdApiKeyFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    private static boolean isProtectedApiRequest(HttpServletRequest request) {
+        return isProtectedApiMutation(request) || isProtectedLaseObservability(request);
+    }
+
     private static boolean isProtectedApiMutation(HttpServletRequest request) {
         String method = request.getMethod();
         return request.getRequestURI().startsWith("/api/")
                 && ("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method));
+    }
+
+    private static boolean isProtectedLaseObservability(HttpServletRequest request) {
+        return "GET".equals(request.getMethod()) && request.getRequestURI().startsWith("/api/lase/");
     }
 
     private static boolean constantTimeEquals(byte[] expected, byte[] actual) {

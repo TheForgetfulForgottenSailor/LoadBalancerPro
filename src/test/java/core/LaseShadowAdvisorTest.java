@@ -61,10 +61,39 @@ class LaseShadowAdvisorTest {
     }
 
     @Test
+    void enabledAdvisorRecordsSuccessfulShadowEvent() {
+        LaseShadowEventLog eventLog = new LaseShadowEventLog(10);
+        LaseShadowAdvisor advisor = deterministicAdvisor(true, eventLog);
+
+        advisor.observe("CAPACITY_AWARE", servers(), 60.0,
+                new LoadDistributionResult(Map.of("S1", 25.0, "S2", 35.0), 0.0));
+
+        LaseShadowObservabilitySnapshot snapshot = eventLog.snapshot();
+
+        assertEquals(1, snapshot.summary().totalEvaluations());
+        assertEquals(0, snapshot.summary().failSafeCount());
+        assertEquals(NOW, snapshot.summary().latestEventTimestamp());
+        assertEquals(1, snapshot.recentEvents().size());
+        LaseShadowEvent event = snapshot.recentEvents().get(0);
+        assertEquals("lase-shadow-capacity-aware", event.evaluationId());
+        assertEquals("CAPACITY_AWARE", event.strategy());
+        assertEquals("S2", event.actualSelectedServerId());
+        assertTrue(event.recommendedServerId() == null || !event.recommendedServerId().isBlank());
+        assertTrue(event.decisionScore() == null || event.decisionScore() >= 0.0);
+        if (event.agreedWithRouting() != null) {
+            assertNotNull(event.actualSelectedServerId());
+            assertNotNull(event.recommendedServerId());
+        }
+        assertFalse(event.failSafe());
+        assertTrue(event.reason().contains("Evaluation lase-shadow-capacity-aware"));
+    }
+
+    @Test
     void advisorFailsSafelyWhenEvaluationThrows() {
+        LaseShadowEventLog eventLog = new LaseShadowEventLog(10);
         LaseShadowAdvisor advisor = new LaseShadowAdvisor(true, (input, config) -> {
             throw new IllegalStateException("synthetic failure");
-        }, CLOCK);
+        }, CLOCK, eventLog);
 
         assertDoesNotThrow(() -> {
             Optional<LaseEvaluationReport> report = advisor.observe(
@@ -73,6 +102,11 @@ class LaseShadowAdvisorTest {
             assertTrue(report.isEmpty());
         });
         assertTrue(advisor.lastReport().isEmpty());
+        LaseShadowObservabilitySnapshot snapshot = eventLog.snapshot();
+        assertEquals(1, snapshot.summary().totalEvaluations());
+        assertEquals(1, snapshot.summary().failSafeCount());
+        assertEquals("FAIL_SAFE", snapshot.recentEvents().get(0).recommendedAction());
+        assertTrue(snapshot.recentEvents().get(0).failureReason().contains("synthetic failure"));
     }
 
     @Test
@@ -156,13 +190,17 @@ class LaseShadowAdvisorTest {
     }
 
     private static LaseShadowAdvisor deterministicAdvisor(boolean enabled) {
+        return deterministicAdvisor(enabled, new LaseShadowEventLog(10));
+    }
+
+    private static LaseShadowAdvisor deterministicAdvisor(boolean enabled, LaseShadowEventLog eventLog) {
         LaseEvaluationEngine engine = new LaseEvaluationEngine(
                 new TailLatencyPowerOfTwoStrategy(new ServerScoreCalculator(), new Random(7), CLOCK),
                 new LoadSheddingPolicy(),
                 new ShadowAutoscaler(),
                 new FailureScenarioRunner(),
                 CLOCK);
-        return new LaseShadowAdvisor(enabled, engine, CLOCK);
+        return new LaseShadowAdvisor(enabled, engine, CLOCK, eventLog);
     }
 
     private static LoadBalancer balancerWithServers() {

@@ -2,6 +2,7 @@ package api;
 
 import java.util.Map;
 
+import core.LaseShadowObservabilitySnapshot;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,6 +25,11 @@ public class AllocatorController {
     @GetMapping("/health")
     public Map<String, String> health() {
         return Map.of("status", "ok", "version", VERSION);
+    }
+
+    @GetMapping("/lase/shadow")
+    public LaseShadowObservabilitySnapshot laseShadowObservability() {
+        return allocatorService.laseShadowObservability();
     }
 
     @PostMapping("/allocate/capacity-aware")

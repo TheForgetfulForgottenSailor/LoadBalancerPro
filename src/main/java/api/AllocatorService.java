@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 
 import core.LoadBalancer;
 import core.LoadDistributionResult;
+import core.LaseShadowEventLog;
+import core.LaseShadowObservabilitySnapshot;
 import core.ScalingRecommendation;
 import core.Server;
 import core.ServerType;
@@ -18,6 +20,7 @@ public class AllocatorService {
     private static final String LASE_SHADOW_ENVIRONMENT_VARIABLE = "LOADBALANCERPRO_LASE_SHADOW_ENABLED";
 
     private final boolean laseShadowEnabled;
+    private final LaseShadowEventLog laseShadowEventLog = new LaseShadowEventLog();
 
     public AllocatorService(Environment environment) {
         this.laseShadowEnabled = resolveLaseShadowEnabled(environment);
@@ -29,6 +32,10 @@ public class AllocatorService {
 
     public AllocationResponse predictive(AllocationRequest request) {
         return allocate(request, false);
+    }
+
+    public LaseShadowObservabilitySnapshot laseShadowObservability() {
+        return laseShadowEventLog.snapshot();
     }
 
     private AllocationResponse allocate(AllocationRequest request, boolean capacityAware) {
@@ -70,7 +77,7 @@ public class AllocatorService {
     }
 
     private LoadBalancer createLoadBalancer() {
-        return new LoadBalancer(laseShadowEnabled);
+        return new LoadBalancer(laseShadowEnabled, laseShadowEventLog);
     }
 
     private static ScalingSimulationResult simulateScaling(
