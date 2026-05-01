@@ -506,10 +506,20 @@ OpenTelemetry-compatible OTLP metrics export is available through Micrometer and
 
 ```properties
 management.otlp.metrics.export.enabled=true
-management.otlp.metrics.export.url=${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT}
+management.otlp.metrics.export.url=http://localhost:4318/v1/metrics
 ```
 
-Metrics include stable `application` and `environment` tags plus OpenTelemetry resource attributes for `service.name`, `service.version`, and `deployment.environment`.
+For production-like runs, provide the endpoint through `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` and keep it pointed at a trusted private collector. The app includes lab-grade startup guardrails:
+
+```properties
+loadbalancerpro.telemetry.otlp.require-private-endpoint=true
+loadbalancerpro.telemetry.otlp.allow-insecure-localhost=true
+loadbalancerpro.telemetry.startup-summary.enabled=true
+```
+
+When OTLP metrics export is enabled, startup fails if the endpoint is blank, malformed, contains credentials/query strings/fragments, uses disallowed localhost, or points at an obviously public hostname while private endpoints are required. The guardrail accepts local development endpoints, RFC1918 private IPv4 ranges, and internal hostnames ending in `.local`, `.internal`, or `.lan`. This is a configuration safety check only: it does not contact the collector, validate TLS, prove collector security, or replace production network, IAM, firewall, or egress-policy enforcement.
+
+Metrics include stable `application` and `environment` tags plus OpenTelemetry resource attributes for `service.name`, `service.version`, and `deployment.environment`. Startup logs include a sanitized telemetry summary with the OTLP host only, never query strings, credentials, headers, or request bodies.
 
 Telemetry can expose service names, route names, error rates, latency, host/runtime details, and operational patterns. Send OTLP only to a trusted collector; production collectors should be reachable only on private networks or equivalent trusted infrastructure. Do not expose Prometheus scrape endpoints or collector endpoints publicly, and do not commit telemetry credentials, bearer tokens, API keys, auth headers, or request-body samples. If a collector requires authentication, configure it through deployment secret management rather than README examples or source-controlled properties.
 

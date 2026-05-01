@@ -29,6 +29,9 @@ class OpenTelemetryMetricsConfigurationTest {
         assertEquals("false", environment.getProperty("management.otlp.metrics.export.enabled"));
         assertEquals("loadbalancerpro", environment.getProperty("management.metrics.tags.application"));
         assertEquals("local", environment.getProperty("management.metrics.tags.environment"));
+        assertEquals("true", environment.getProperty("loadbalancerpro.telemetry.otlp.require-private-endpoint"));
+        assertEquals("true", environment.getProperty("loadbalancerpro.telemetry.otlp.allow-insecure-localhost"));
+        assertEquals("true", environment.getProperty("loadbalancerpro.telemetry.startup-summary.enabled"));
 
         Map<String, String> resourceAttributes = resourceAttributes(environment);
         assertEquals("loadbalancerpro", resourceAttributes.get("service.name"));
