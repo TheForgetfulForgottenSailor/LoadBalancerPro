@@ -1,7 +1,10 @@
 package core;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +18,9 @@ class LaseShadowReplayMetricsTest {
     private static final Instant FIRST = Instant.parse("2026-04-30T12:00:00Z");
     private static final Instant SECOND = Instant.parse("2026-04-30T12:01:00Z");
     private static final Instant THIRD = Instant.parse("2026-04-30T12:02:00Z");
+
+    @TempDir
+    Path tempDir;
 
     @Test
     void calculatesReplayAggregatesFromShadowEvents() {
@@ -73,6 +79,27 @@ class LaseShadowReplayMetricsTest {
         assertEquals(LaseShadowNetworkSummary.empty(), metrics.networkSummary());
         assertEquals(Map.of(), metrics.recommendationCounts());
         assertEquals(Map.of(), metrics.failureReasonCounts());
+    }
+
+    @Test
+    void evaluatesReplayFileThroughStreamingReader() throws Exception {
+        LaseShadowReplayReader reader = new LaseShadowReplayReader();
+        Path replayFile = tempDir.resolve("shadow-events.jsonl");
+        Files.writeString(replayFile, reader.toJsonLine(LaseShadowReplayRecord.fromEvent(
+                event("eval-1", FIRST, "HOLD", 10.0, 1.0, true, false, null,
+                        signal("S1", 0.10, 0.0, 0.0, 2.0, false, 1))))
+                + System.lineSeparator()
+                + reader.toJsonLine(LaseShadowReplayRecord.fromEvent(
+                event("eval-2", SECOND, "SCALE_UP", 20.0, 3.0, false, false, null,
+                        signal("S2", 0.20, 0.0, 0.0, 4.0, false, 2)))));
+
+        LaseShadowReplayMetrics metrics = new LaseShadowReplayEngine().evaluate(replayFile, reader);
+
+        assertEquals(2, metrics.totalEvents());
+        assertEquals(2, metrics.comparableEvents());
+        assertEquals(1, metrics.agreementCount());
+        assertEquals(0.5, metrics.agreementRate(), 0.001);
+        assertEquals(0.15, metrics.networkSummary().averageTimeoutRate(), 0.001);
     }
 
     @Test

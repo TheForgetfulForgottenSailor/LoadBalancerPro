@@ -4,7 +4,6 @@ import core.LaseShadowReplayEngine;
 import core.LaseShadowReplayException;
 import core.LaseShadowReplayMetrics;
 import core.LaseShadowReplayReader;
-import core.LaseShadowReplayRecord;
 import core.LaseShadowReplayReport;
 import core.LaseShadowReplayReportFormatter;
 
@@ -57,8 +56,7 @@ public final class LaseReplayCommand {
         try {
             Path path = Path.of(replayPath.get());
             LaseShadowReplayReader reader = new LaseShadowReplayReader();
-            List<LaseShadowReplayRecord> records = reader.readAll(path);
-            LaseShadowReplayMetrics metrics = new LaseShadowReplayEngine().evaluate(records);
+            LaseShadowReplayMetrics metrics = new LaseShadowReplayEngine().evaluate(path, reader);
             LaseShadowReplayReport report = new LaseShadowReplayReport(sourceName(path), metrics, WARNINGS);
             out.println(new LaseShadowReplayReportFormatter().format(report));
             return new Result(true, 0);
