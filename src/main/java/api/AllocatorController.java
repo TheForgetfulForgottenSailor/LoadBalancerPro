@@ -14,7 +14,7 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api")
 public class AllocatorController {
-    private static final String VERSION = "1.0.0-rc3";
+    private static final String VERSION = "1.0.0-rc4";
 
     private final AllocatorService allocatorService;
 
