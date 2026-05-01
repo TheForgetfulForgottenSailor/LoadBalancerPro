@@ -60,6 +60,42 @@ class OpenTelemetryMetricsEnabledConfigurationTest {
     }
 }
 
+@SpringBootTest(properties = {
+        "management.otlp.metrics.export.enabled=false",
+        "management.otlp.metrics.export.url=http://127.0.0.1:1/v1/metrics"
+})
+class OpenTelemetryMetricsDisabledCollectorConfigurationTest {
+    @Autowired
+    private MeterRegistry meterRegistry;
+
+    @Test
+    void disabledOtlpMetricsDoNotRequireCollectorReachability() {
+        assertFalse(OtlpRegistryAssertions.hasOtlpRegistry(meterRegistry));
+    }
+}
+
+@SpringBootTest(properties = {
+        "spring.profiles.active=prod",
+        "LOADBALANCERPRO_OTLP_METRICS_ENABLED=true",
+        "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://localhost:4318/v1/metrics",
+        "management.otlp.metrics.export.step=1h"
+})
+class OpenTelemetryMetricsEnvironmentOptInConfigurationTest {
+    @Autowired
+    private Environment environment;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
+
+    @Test
+    void environmentOptInCreatesOtlpRegistry() {
+        assertEquals("true", environment.getProperty("management.otlp.metrics.export.enabled"));
+        assertEquals("http://localhost:4318/v1/metrics",
+                environment.getProperty("management.otlp.metrics.export.url"));
+        assertTrue(OtlpRegistryAssertions.hasOtlpRegistry(meterRegistry));
+    }
+}
+
 final class OtlpRegistryAssertions {
     private OtlpRegistryAssertions() {
     }

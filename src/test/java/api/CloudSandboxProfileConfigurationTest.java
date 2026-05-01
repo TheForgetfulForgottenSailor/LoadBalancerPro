@@ -71,6 +71,15 @@ class CloudSandboxProfileConfigurationTest {
     }
 
     @Test
+    void cloudSandboxProfileDoesNotExposeMetricsOrPrometheusByDefault() throws Exception {
+        mockMvc.perform(get("/actuator/metrics"))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void cloudSandboxProfileStartsWithoutAwsCredentialsAndKeepsHealthPublic() throws Exception {
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk())

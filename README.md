@@ -502,16 +502,18 @@ http://localhost:8080/actuator/prometheus
 
 Domain metrics include allocation counters/gauges, parsing failures, and cloud scale decisions with source and reason tags.
 
-OpenTelemetry-compatible OTLP metrics export is available through Micrometer and is disabled by default. To opt in for a local collector:
+OpenTelemetry-compatible OTLP metrics export is available through Micrometer and is disabled by default. This branch adds metrics export only; it does not enable tracing export, log export, or a collector container. To opt in for a trusted collector:
 
 ```properties
 management.otlp.metrics.export.enabled=true
-management.otlp.metrics.export.url=http://localhost:4318/v1/metrics
+management.otlp.metrics.export.url=${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT}
 ```
 
 Metrics include stable `application` and `environment` tags plus OpenTelemetry resource attributes for `service.name`, `service.version`, and `deployment.environment`.
 
-The `prod` profile exposes only `/actuator/health` and `/actuator/info` by default. Keep metrics and Prometheus behind deployment-specific network and authentication controls before enabling them outside a demo environment.
+Telemetry can expose service names, route names, error rates, latency, host/runtime details, and operational patterns. Send OTLP only to a trusted collector; production collectors should be reachable only on private networks or equivalent trusted infrastructure. Do not expose Prometheus scrape endpoints or collector endpoints publicly, and do not commit telemetry credentials, bearer tokens, API keys, auth headers, or request-body samples. If a collector requires authentication, configure it through deployment secret management rather than README examples or source-controlled properties.
+
+The `prod` and `cloud-sandbox` profiles expose only `/actuator/health` and `/actuator/info` by default, leave Prometheus endpoint exposure disabled, and leave OTLP metrics export disabled unless explicitly enabled. Keep metrics and Prometheus behind deployment-specific network and authentication controls before enabling them outside a demo environment.
 
 ## CLI
 

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -25,6 +26,9 @@ class LocalProfileConfigurationTest {
 
     @Autowired
     private AllocatorService allocatorService;
+
+    @Autowired
+    private Environment environment;
 
     @Test
     void localProfileKeepsHealthAndDemoObservabilityAvailable() throws Exception {
@@ -39,6 +43,8 @@ class LocalProfileConfigurationTest {
         mockMvc.perform(get("/actuator/prometheus"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("jvm_info")));
+
+        assertFalse(Boolean.parseBoolean(environment.getProperty("management.otlp.metrics.export.enabled")));
     }
 
     @Test
