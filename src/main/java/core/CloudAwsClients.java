@@ -1,31 +1,29 @@
 package core;
 
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.services.autoscaling.AmazonAutoScaling;
-import com.amazonaws.services.autoscaling.AmazonAutoScalingClientBuilder;
-import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
-import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.autoscaling.AutoScalingClient;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
+import software.amazon.awssdk.services.ec2.Ec2Client;
 
 import java.util.Objects;
 
 final class CloudAwsClients {
-    private static final ClientBuilder SDK_V1_CLIENT_BUILDER = new SdkV1ClientBuilder();
+    private static final ClientBuilder SDK_V2_CLIENT_BUILDER = new SdkV2ClientBuilder();
 
-    private final AmazonEC2 ec2;
-    private final AmazonCloudWatch cloudWatch;
-    private final AmazonAutoScaling autoScaling;
+    private final Ec2Client ec2;
+    private final CloudWatchClient cloudWatch;
+    private final AutoScalingClient autoScaling;
 
-    private CloudAwsClients(AmazonEC2 ec2, AmazonCloudWatch cloudWatch, AmazonAutoScaling autoScaling) {
+    private CloudAwsClients(Ec2Client ec2, CloudWatchClient cloudWatch, AutoScalingClient autoScaling) {
         this.ec2 = ec2;
         this.cloudWatch = cloudWatch;
         this.autoScaling = autoScaling;
     }
 
     static CloudAwsClients fromConfig(CloudConfig config) {
-        return fromConfig(config, SDK_V1_CLIENT_BUILDER);
+        return fromConfig(config, SDK_V2_CLIENT_BUILDER);
     }
 
     static CloudAwsClients fromConfig(CloudConfig config, ClientBuilder builder) {
@@ -35,8 +33,8 @@ final class CloudAwsClients {
             return dryRun();
         }
 
-        BasicAWSCredentials credentials = new BasicAWSCredentials(config.getAccessKey(), config.getSecretKey());
-        AWSStaticCredentialsProvider provider = new AWSStaticCredentialsProvider(credentials);
+        AwsBasicCredentials credentials = AwsBasicCredentials.create(config.getAccessKey(), config.getSecretKey());
+        StaticCredentialsProvider provider = StaticCredentialsProvider.create(credentials);
         return new CloudAwsClients(
                 builder.buildEc2(config, provider),
                 builder.buildCloudWatch(config, provider),
@@ -47,19 +45,19 @@ final class CloudAwsClients {
         return new CloudAwsClients(null, null, null);
     }
 
-    static CloudAwsClients of(AmazonEC2 ec2, AmazonCloudWatch cloudWatch, AmazonAutoScaling autoScaling) {
+    static CloudAwsClients of(Ec2Client ec2, CloudWatchClient cloudWatch, AutoScalingClient autoScaling) {
         return new CloudAwsClients(ec2, cloudWatch, autoScaling);
     }
 
-    AmazonEC2 ec2() {
+    Ec2Client ec2() {
         return ec2;
     }
 
-    AmazonCloudWatch cloudWatch() {
+    CloudWatchClient cloudWatch() {
         return cloudWatch;
     }
 
-    AmazonAutoScaling autoScaling() {
+    AutoScalingClient autoScaling() {
         return autoScaling;
     }
 
@@ -69,46 +67,46 @@ final class CloudAwsClients {
 
     void shutdown() {
         if (ec2 != null) {
-            ec2.shutdown();
+            ec2.close();
         }
         if (cloudWatch != null) {
-            cloudWatch.shutdown();
+            cloudWatch.close();
         }
         if (autoScaling != null) {
-            autoScaling.shutdown();
+            autoScaling.close();
         }
     }
 
     interface ClientBuilder {
-        AmazonEC2 buildEc2(CloudConfig config, AWSStaticCredentialsProvider provider);
+        Ec2Client buildEc2(CloudConfig config, StaticCredentialsProvider provider);
 
-        AmazonCloudWatch buildCloudWatch(CloudConfig config, AWSStaticCredentialsProvider provider);
+        CloudWatchClient buildCloudWatch(CloudConfig config, StaticCredentialsProvider provider);
 
-        AmazonAutoScaling buildAutoScaling(CloudConfig config, AWSStaticCredentialsProvider provider);
+        AutoScalingClient buildAutoScaling(CloudConfig config, StaticCredentialsProvider provider);
     }
 
-    private static final class SdkV1ClientBuilder implements ClientBuilder {
+    private static final class SdkV2ClientBuilder implements ClientBuilder {
         @Override
-        public AmazonEC2 buildEc2(CloudConfig config, AWSStaticCredentialsProvider provider) {
-            return AmazonEC2ClientBuilder.standard()
-                    .withCredentials(provider)
-                    .withRegion(config.getRegion())
+        public Ec2Client buildEc2(CloudConfig config, StaticCredentialsProvider provider) {
+            return Ec2Client.builder()
+                    .credentialsProvider(provider)
+                    .region(Region.of(config.getRegion()))
                     .build();
         }
 
         @Override
-        public AmazonCloudWatch buildCloudWatch(CloudConfig config, AWSStaticCredentialsProvider provider) {
-            return AmazonCloudWatchClientBuilder.standard()
-                    .withCredentials(provider)
-                    .withRegion(config.getRegion())
+        public CloudWatchClient buildCloudWatch(CloudConfig config, StaticCredentialsProvider provider) {
+            return CloudWatchClient.builder()
+                    .credentialsProvider(provider)
+                    .region(Region.of(config.getRegion()))
                     .build();
         }
 
         @Override
-        public AmazonAutoScaling buildAutoScaling(CloudConfig config, AWSStaticCredentialsProvider provider) {
-            return AmazonAutoScalingClientBuilder.standard()
-                    .withCredentials(provider)
-                    .withRegion(config.getRegion())
+        public AutoScalingClient buildAutoScaling(CloudConfig config, StaticCredentialsProvider provider) {
+            return AutoScalingClient.builder()
+                    .credentialsProvider(provider)
+                    .region(Region.of(config.getRegion()))
                     .build();
         }
     }

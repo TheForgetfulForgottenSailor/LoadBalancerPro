@@ -1,15 +1,15 @@
 package core;
 
-import com.amazonaws.services.autoscaling.AmazonAutoScaling;
-import com.amazonaws.services.autoscaling.model.AutoScalingGroup;
-import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsRequest;
-import com.amazonaws.services.autoscaling.model.DescribeAutoScalingGroupsResult;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import software.amazon.awssdk.services.autoscaling.AutoScalingClient;
+import software.amazon.awssdk.services.autoscaling.model.AutoScalingGroup;
+import software.amazon.awssdk.services.autoscaling.model.DescribeAutoScalingGroupsRequest;
+import software.amazon.awssdk.services.autoscaling.model.DescribeAutoScalingGroupsResponse;
 import util.Utils;
 
 import java.nio.file.Files;
@@ -69,7 +69,7 @@ class DomainMetricsTest {
     void cloudScaleDecisionMetricsIncludeDecisionAndSourceTags() throws Exception {
         CloudConfig dryRunConfig = new CloudConfig(ACCESS_KEY, SECRET_KEY, "us-east-1", "lt-test", "subnet-test");
         CloudManager dryRunManager = new CloudManager(
-                new LoadBalancer(), dryRunConfig, null, null, mock(AmazonAutoScaling.class), null);
+                new LoadBalancer(), dryRunConfig, null, null, mock(AutoScalingClient.class), null);
         dryRunManager.scaleServersAsync(2, CloudMutationSource.PREDICTIVE, ignored -> {});
         dryRunManager.shutdown();
 
@@ -81,7 +81,7 @@ class DomainMetricsTest {
                 "decision", "DRY_RUN",
                 "reason", "DRY_RUN").count());
 
-        AmazonAutoScaling deniedAutoScaling = mock(AmazonAutoScaling.class);
+        AutoScalingClient deniedAutoScaling = mock(AutoScalingClient.class);
         CloudManager deniedManager = new CloudManager(
                 new LoadBalancer(), liveConfig(), null, null, deniedAutoScaling, null);
         scaleAndWait(deniedManager, 1, CloudMutationSource.OPERATOR);
@@ -92,13 +92,15 @@ class DomainMetricsTest {
                 "source", "OPERATOR",
                 "reason", "ALLOW_LIVE_MUTATION_DISABLED").count());
 
-        AmazonAutoScaling allowedAutoScaling = mock(AmazonAutoScaling.class);
+        AutoScalingClient allowedAutoScaling = mock(AutoScalingClient.class);
         CloudConfig allowedConfig = liveConfigWithGuardrails();
         when(allowedAutoScaling.describeAutoScalingGroups(any(DescribeAutoScalingGroupsRequest.class)))
-                .thenReturn(new DescribeAutoScalingGroupsResult()
-                        .withAutoScalingGroups(new AutoScalingGroup()
-                                .withAutoScalingGroupName(allowedConfig.getAutoScalingGroupName())
-                                .withDesiredCapacity(0)));
+                .thenReturn(DescribeAutoScalingGroupsResponse.builder()
+                        .autoScalingGroups(AutoScalingGroup.builder()
+                                .autoScalingGroupName(allowedConfig.getAutoScalingGroupName())
+                                .desiredCapacity(0)
+                                .build())
+                        .build());
         CloudManager allowedManager = new CloudManager(
                 new LoadBalancer(), allowedConfig, null, null, allowedAutoScaling, null);
         scaleAndWait(allowedManager, 1, CloudMutationSource.OPERATOR);

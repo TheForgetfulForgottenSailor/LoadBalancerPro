@@ -1,11 +1,5 @@
 package core;
 
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.model.*;
-import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
-import com.amazonaws.services.cloudwatch.model.*;
-import com.amazonaws.services.autoscaling.AmazonAutoScaling;
-import com.amazonaws.services.autoscaling.model.*;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.logging.log4j.LogManager;
@@ -14,6 +8,23 @@ import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 import gui.Command;
 import gui.Command.Status;
+import software.amazon.awssdk.services.autoscaling.AutoScalingClient;
+import software.amazon.awssdk.services.autoscaling.model.AutoScalingGroup;
+import software.amazon.awssdk.services.autoscaling.model.CreateAutoScalingGroupRequest;
+import software.amazon.awssdk.services.autoscaling.model.DeleteAutoScalingGroupRequest;
+import software.amazon.awssdk.services.autoscaling.model.DescribeAutoScalingGroupsRequest;
+import software.amazon.awssdk.services.autoscaling.model.DescribeAutoScalingGroupsResponse;
+import software.amazon.awssdk.services.autoscaling.model.LaunchTemplateSpecification;
+import software.amazon.awssdk.services.autoscaling.model.UpdateAutoScalingGroupRequest;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
+import software.amazon.awssdk.services.cloudwatch.model.Dimension;
+import software.amazon.awssdk.services.cloudwatch.model.GetMetricStatisticsRequest;
+import software.amazon.awssdk.services.cloudwatch.model.GetMetricStatisticsResponse;
+import software.amazon.awssdk.services.cloudwatch.model.Statistic;
+import software.amazon.awssdk.services.ec2.Ec2Client;
+import software.amazon.awssdk.services.ec2.model.DescribeInstancesResponse;
+import software.amazon.awssdk.services.ec2.model.InstanceStateName;
+import software.amazon.awssdk.services.ec2.model.Reservation;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -84,8 +95,8 @@ public class CloudManager {
     }
 
     // For testing with injected clients
-    CloudManager(LoadBalancer balancer, CloudConfig config, AmazonEC2 ec2Client, AmazonCloudWatch cloudWatchClient,
-                 AmazonAutoScaling autoScalingClient, Consumer<Command> commandRecorder) {
+    CloudManager(LoadBalancer balancer, CloudConfig config, Ec2Client ec2Client, CloudWatchClient cloudWatchClient,
+                 AutoScalingClient autoScalingClient, Consumer<Command> commandRecorder) {
         this(balancer, config, CloudAwsClients.of(ec2Client, cloudWatchClient, autoScalingClient), commandRecorder);
     }
 
@@ -167,14 +178,20 @@ public class CloudManager {
                 status = Status.FAILED;
                 return;
             }
-            CreateAutoScalingGroupRequest asgRequest = new CreateAutoScalingGroupRequest()
-                    .withAutoScalingGroupName(manager.config.getAutoScalingGroupName())
-                    .withMinSize(minServers)
-                    .withMaxSize(maxServers)
-                    .withDesiredCapacity(minServers)
-                    .withLaunchTemplate(new com.amazonaws.services.autoscaling.model.LaunchTemplateSpecification().withLaunchTemplateId(manager.config.getLaunchTemplateId()))
-                    .withVPCZoneIdentifier(manager.config.getSubnetId())
-                    .withTags(new com.amazonaws.services.autoscaling.model.Tag().withKey("LoadBalancerPro").withValue(manager.config.getAutoScalingGroupName()));
+            CreateAutoScalingGroupRequest asgRequest = CreateAutoScalingGroupRequest.builder()
+                    .autoScalingGroupName(manager.config.getAutoScalingGroupName())
+                    .minSize(minServers)
+                    .maxSize(maxServers)
+                    .desiredCapacity(minServers)
+                    .launchTemplate(LaunchTemplateSpecification.builder()
+                            .launchTemplateId(manager.config.getLaunchTemplateId())
+                            .build())
+                    .vpcZoneIdentifier(manager.config.getSubnetId())
+                    .tags(software.amazon.awssdk.services.autoscaling.model.Tag.builder()
+                            .key("LoadBalancerPro")
+                            .value(manager.config.getAutoScalingGroupName())
+                            .build())
+                    .build();
 
             boolean created = manager.executeWithRetry(() -> {
                 manager.awsClients.autoScaling().createAutoScalingGroup(asgRequest);
@@ -221,13 +238,15 @@ public class CloudManager {
         }
         long startTime = System.currentTimeMillis();
         while (System.currentTimeMillis() - startTime < config.getPollTimeoutSeconds() * 1000 && !isShuttingDown.get()) {
-            DescribeAutoScalingGroupsResult result = executeWithRetry(() -> 
+            DescribeAutoScalingGroupsResponse result = executeWithRetry(() ->
                 awsClients.autoScaling().describeAutoScalingGroups(
-                    new DescribeAutoScalingGroupsRequest().withAutoScalingGroupNames(config.getAutoScalingGroupName())),
+                    DescribeAutoScalingGroupsRequest.builder()
+                            .autoScalingGroupNames(config.getAutoScalingGroupName())
+                            .build()),
                 "describe ASG during initialization", null);
-            if (result != null && !result.getAutoScalingGroups().isEmpty()) {
-                int runningCount = (int) result.getAutoScalingGroups().get(0).getInstances().stream()
-                    .filter(i -> i.getLifecycleState().equals("InService")).count();
+            if (result != null && !result.autoScalingGroups().isEmpty()) {
+                int runningCount = (int) result.autoScalingGroups().get(0).instances().stream()
+                    .filter(i -> "InService".equals(i.lifecycleStateAsString())).count();
                 if (runningCount >= minServers) {
                     logZeroCopy("All {} instances are in service after {}ms", minServers, 
                                 System.currentTimeMillis() - startTime);
@@ -254,14 +273,14 @@ public class CloudManager {
             logZeroCopy("No ASG-owned instances found for registration; skipped cloud instance registration.");
             return;
         }
-        DescribeInstancesResult result = executeWithRetry(() -> awsClients.ec2().describeInstances(),
+        DescribeInstancesResponse result = executeWithRetry(() -> awsClients.ec2().describeInstances(),
                                                           "describe instances during initialization", null);
-        if (result != null && result.getReservations() != null) {
-            for (Reservation reservation : result.getReservations()) {
-                for (com.amazonaws.services.ec2.model.Instance instance : reservation.getInstances()) {
-                    String instanceId = instance.getInstanceId();
-                    String stateName = instance.getState() != null ? instance.getState().getName() : "";
-                    if (!"running".equals(stateName)) {
+        if (result != null && result.reservations() != null) {
+            for (Reservation reservation : result.reservations()) {
+                for (software.amazon.awssdk.services.ec2.model.Instance instance : reservation.instances()) {
+                    String instanceId = instance.instanceId();
+                    InstanceStateName stateName = instance.state() != null ? instance.state().name() : null;
+                    if (!InstanceStateName.RUNNING.equals(stateName)) {
                         continue;
                     }
                     if (!ownedInstanceIds.contains(instanceId)) {
@@ -283,17 +302,18 @@ public class CloudManager {
     }
 
     private Set<String> getAutoScalingGroupInstanceIdsForRegistration() {
-        DescribeAutoScalingGroupsResult result = executeWithRetry(() ->
+        DescribeAutoScalingGroupsResponse result = executeWithRetry(() ->
                 awsClients.autoScaling().describeAutoScalingGroups(
-                        new DescribeAutoScalingGroupsRequest()
-                                .withAutoScalingGroupNames(config.getAutoScalingGroupName())),
+                        DescribeAutoScalingGroupsRequest.builder()
+                                .autoScalingGroupNames(config.getAutoScalingGroupName())
+                                .build()),
                 "describe ASG instances for registration", null);
         Optional<AutoScalingGroup> asg = findConfiguredAutoScalingGroup(result);
-        if (asg.isEmpty() || asg.get().getInstances() == null) {
+        if (asg.isEmpty() || asg.get().instances() == null) {
             return Set.of();
         }
-        return asg.get().getInstances().stream()
-                .map(com.amazonaws.services.autoscaling.model.Instance::getInstanceId)
+        return asg.get().instances().stream()
+                .map(software.amazon.awssdk.services.autoscaling.model.Instance::instanceId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toUnmodifiableSet());
     }
@@ -303,9 +323,14 @@ public class CloudManager {
             logZeroCopy("Dry-run mode: skipped tagging instance {}", instanceId);
             return;
         }
-        CreateTagsRequest tagRequest = new CreateTagsRequest()
-            .withResources(instanceId)
-            .withTags(new com.amazonaws.services.ec2.model.Tag().withKey("LoadBalancerPro").withValue(config.getAutoScalingGroupName()));
+        software.amazon.awssdk.services.ec2.model.CreateTagsRequest tagRequest =
+                software.amazon.awssdk.services.ec2.model.CreateTagsRequest.builder()
+            .resources(instanceId)
+            .tags(software.amazon.awssdk.services.ec2.model.Tag.builder()
+                    .key("LoadBalancerPro")
+                    .value(config.getAutoScalingGroupName())
+                    .build())
+            .build();
         executeWithRetry(() -> {
             awsClients.ec2().createTags(tagRequest);
             logger.debug("Tagged instance {} with LoadBalancerPro", instanceId);
@@ -344,18 +369,19 @@ public class CloudManager {
         if (config.isDryRun()) {
             return new MetricCacheEntry(0.0, System.currentTimeMillis());
         }
-        GetMetricStatisticsRequest request = new GetMetricStatisticsRequest()
-            .withNamespace("AWS/EC2")
-            .withMetricName(metricName)
-            .withDimensions(new Dimension().withName("InstanceId").withValue(instanceId))
-            .withStartTime(new Date(System.currentTimeMillis() - 300000))
-            .withEndTime(new Date(System.currentTimeMillis()))
-            .withPeriod(60)
-            .withStatistics(Statistic.Average);
-        GetMetricStatisticsResult result = executeWithRetry(() -> awsClients.cloudWatch().getMetricStatistics(request),
+        GetMetricStatisticsRequest request = GetMetricStatisticsRequest.builder()
+            .namespace("AWS/EC2")
+            .metricName(metricName)
+            .dimensions(Dimension.builder().name("InstanceId").value(instanceId).build())
+            .startTime(Instant.ofEpochMilli(System.currentTimeMillis() - 300000))
+            .endTime(Instant.ofEpochMilli(System.currentTimeMillis()))
+            .period(60)
+            .statistics(Statistic.AVERAGE)
+            .build();
+        GetMetricStatisticsResponse result = executeWithRetry(() -> awsClients.cloudWatch().getMetricStatistics(request),
                                                             "fetch CloudWatch metric " + metricName + " for " + instanceId, null);
-        double value = result != null && !result.getDatapoints().isEmpty() ? 
-                       validateMetric(result.getDatapoints().get(0).getAverage()) : 0.0;
+        double value = result != null && !result.datapoints().isEmpty() ?
+                       validateMetric(result.datapoints().get(0).average()) : 0.0;
         return new MetricCacheEntry(value, System.currentTimeMillis());
     }
 
@@ -410,23 +436,25 @@ public class CloudManager {
         if (config.isDryRun()) {
             return OptionalInt.of(balancer.getServersByType(ServerType.CLOUD).size());
         }
-        DescribeAutoScalingGroupsResult result = executeWithRetry(() -> 
+        DescribeAutoScalingGroupsResponse result = executeWithRetry(() ->
             awsClients.autoScaling().describeAutoScalingGroups(
-                new DescribeAutoScalingGroupsRequest().withAutoScalingGroupNames(config.getAutoScalingGroupName())),
+                DescribeAutoScalingGroupsRequest.builder()
+                        .autoScalingGroupNames(config.getAutoScalingGroupName())
+                        .build()),
             "get current capacity", null);
         Optional<AutoScalingGroup> asg = findConfiguredAutoScalingGroup(result);
-        if (asg.isEmpty() || asg.get().getDesiredCapacity() == null) {
+        if (asg.isEmpty() || asg.get().desiredCapacity() == null) {
             return OptionalInt.empty();
         }
-        return OptionalInt.of(asg.get().getDesiredCapacity());
+        return OptionalInt.of(asg.get().desiredCapacity());
     }
 
-    private Optional<AutoScalingGroup> findConfiguredAutoScalingGroup(DescribeAutoScalingGroupsResult result) {
-        if (result == null || result.getAutoScalingGroups() == null) {
+    private Optional<AutoScalingGroup> findConfiguredAutoScalingGroup(DescribeAutoScalingGroupsResponse result) {
+        if (result == null || result.autoScalingGroups() == null) {
             return Optional.empty();
         }
-        return result.getAutoScalingGroups().stream()
-                .filter(asg -> config.getAutoScalingGroupName().equals(asg.getAutoScalingGroupName()))
+        return result.autoScalingGroups().stream()
+                .filter(asg -> config.getAutoScalingGroupName().equals(asg.autoScalingGroupName()))
                 .findFirst();
     }
 
@@ -479,9 +507,10 @@ public class CloudManager {
                 if (callback != null) callback.accept(false);
                 return;
             }
-            UpdateAutoScalingGroupRequest request = new UpdateAutoScalingGroupRequest()
-                    .withAutoScalingGroupName(manager.config.getAutoScalingGroupName())
-                    .withDesiredCapacity(desiredCapacity);
+            UpdateAutoScalingGroupRequest request = UpdateAutoScalingGroupRequest.builder()
+                    .autoScalingGroupName(manager.config.getAutoScalingGroupName())
+                    .desiredCapacity(desiredCapacity)
+                    .build();
             boolean success = manager.executeWithRetry(() -> {
                 manager.awsClients.autoScaling().updateAutoScalingGroup(request);
                 manager.logZeroCopy("Scaled Auto Scaling Group {} to {} servers", 
@@ -510,9 +539,10 @@ public class CloudManager {
     public void shutdown() {
         if (isShuttingDown.compareAndSet(false, true)) {
             if (canDeleteCloudResources()) {
-                DeleteAutoScalingGroupRequest deleteRequest = new DeleteAutoScalingGroupRequest()
-                        .withAutoScalingGroupName(config.getAutoScalingGroupName())
-                        .withForceDelete(true);
+                DeleteAutoScalingGroupRequest deleteRequest = DeleteAutoScalingGroupRequest.builder()
+                        .autoScalingGroupName(config.getAutoScalingGroupName())
+                        .forceDelete(true)
+                        .build();
                 executeWithRetry(() -> {
                     awsClients.autoScaling().deleteAutoScalingGroup(deleteRequest);
                     logZeroCopy("Deleted Auto Scaling Group: {}", config.getAutoScalingGroupName());
@@ -551,9 +581,11 @@ public class CloudManager {
             return 0;
         }
         try {
-            DescribeAutoScalingGroupsResult result = awsClients.autoScaling().describeAutoScalingGroups(
-                new DescribeAutoScalingGroupsRequest().withAutoScalingGroupNames(config.getAutoScalingGroupName()));
-            return result.getAutoScalingGroups().isEmpty() ? 0 : result.getAutoScalingGroups().get(0).getMinSize();
+            DescribeAutoScalingGroupsResponse result = awsClients.autoScaling().describeAutoScalingGroups(
+                DescribeAutoScalingGroupsRequest.builder()
+                        .autoScalingGroupNames(config.getAutoScalingGroupName())
+                        .build());
+            return result.autoScalingGroups().isEmpty() ? 0 : result.autoScalingGroups().get(0).minSize();
         } catch (Exception e) {
             logger.error("Failed to get min servers for ASG {}: {}", config.getAutoScalingGroupName(), e.getMessage(), e);
             return 0;
@@ -583,19 +615,21 @@ public class CloudManager {
         if (config.isDryRun()) {
             return;
         }
-        DescribeAutoScalingGroupsResult result = executeWithRetry(() -> 
+        DescribeAutoScalingGroupsResponse result = executeWithRetry(() ->
             awsClients.autoScaling().describeAutoScalingGroups(
-                new DescribeAutoScalingGroupsRequest().withAutoScalingGroupNames(config.getAutoScalingGroupName())),
+                DescribeAutoScalingGroupsRequest.builder()
+                        .autoScalingGroupNames(config.getAutoScalingGroupName())
+                        .build()),
             "check ASG health", null);
-        if (result != null && !result.getAutoScalingGroups().isEmpty()) {
-            AutoScalingGroup asg = result.getAutoScalingGroups().get(0);
-            int healthyCount = (int) asg.getInstances().stream()
-                .filter(i -> i.getHealthStatus().equals("Healthy")).count();
-            if (healthyCount < asg.getMinSize()) {
+        if (result != null && !result.autoScalingGroups().isEmpty()) {
+            AutoScalingGroup asg = result.autoScalingGroups().get(0);
+            int healthyCount = (int) asg.instances().stream()
+                .filter(i -> "Healthy".equals(i.healthStatus())).count();
+            if (healthyCount < asg.minSize()) {
                 logZeroCopy("ASG {} unhealthy: {} healthy instances < min size {}; repairing...", 
-                            config.getAutoScalingGroupName(), healthyCount, asg.getMinSize());
-                scaleServersAsync(asg.getMinSize(), CloudMutationSource.SELF_HEALING, success ->
-                    logZeroCopy("Self-healing scale to min size {} completed: {}", asg.getMinSize(), success));
+                            config.getAutoScalingGroupName(), healthyCount, asg.minSize());
+                scaleServersAsync(asg.minSize(), CloudMutationSource.SELF_HEALING, success ->
+                    logZeroCopy("Self-healing scale to min size {} completed: {}", asg.minSize(), success));
             }
         }
     }
@@ -865,25 +899,26 @@ public class CloudManager {
             return false;
         }
 
-        DescribeAutoScalingGroupsResult result = executeWithRetry(() ->
+        DescribeAutoScalingGroupsResponse result = executeWithRetry(() ->
                 awsClients.autoScaling().describeAutoScalingGroups(
-                        new DescribeAutoScalingGroupsRequest()
-                                .withAutoScalingGroupNames(config.getAutoScalingGroupName())),
+                        DescribeAutoScalingGroupsRequest.builder()
+                                .autoScalingGroupNames(config.getAutoScalingGroupName())
+                                .build()),
                 "validate ASG ownership before deletion", null);
-        if (result == null || result.getAutoScalingGroups().isEmpty()) {
+        if (result == null || result.autoScalingGroups().isEmpty()) {
             logZeroCopy("Denied cloud resource deletion. No ASG found for {}", config.getAutoScalingGroupName());
             return false;
         }
 
-        return result.getAutoScalingGroups().stream()
-                .filter(asg -> config.getAutoScalingGroupName().equals(asg.getAutoScalingGroupName()))
+        return result.autoScalingGroups().stream()
+                .filter(asg -> config.getAutoScalingGroupName().equals(asg.autoScalingGroupName()))
                 .anyMatch(this::hasDeletionOwnershipTag);
     }
 
     private boolean hasDeletionOwnershipTag(AutoScalingGroup asg) {
-        return asg.getTags() != null && asg.getTags().stream()
-                .anyMatch(tag -> "LoadBalancerPro".equals(tag.getKey())
-                        && config.getAutoScalingGroupName().equals(tag.getValue()));
+        return asg.tags() != null && asg.tags().stream()
+                .anyMatch(tag -> "LoadBalancerPro".equals(tag.key())
+                        && config.getAutoScalingGroupName().equals(tag.value()));
     }
 
     private static class MetricCacheEntry {

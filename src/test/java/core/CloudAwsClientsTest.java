@@ -1,10 +1,10 @@
 package core;
 
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.services.autoscaling.AmazonAutoScaling;
-import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
-import com.amazonaws.services.ec2.AmazonEC2;
 import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.services.autoscaling.AutoScalingClient;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
+import software.amazon.awssdk.services.ec2.Ec2Client;
 
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,25 +46,25 @@ class CloudAwsClientsTest {
     }
 
     private static final class CountingBuilder implements CloudAwsClients.ClientBuilder {
-        private final AmazonEC2 ec2 = mock(AmazonEC2.class);
-        private final AmazonCloudWatch cloudWatch = mock(AmazonCloudWatch.class);
-        private final AmazonAutoScaling autoScaling = mock(AmazonAutoScaling.class);
+        private final Ec2Client ec2 = mock(Ec2Client.class);
+        private final CloudWatchClient cloudWatch = mock(CloudWatchClient.class);
+        private final AutoScalingClient autoScaling = mock(AutoScalingClient.class);
         private final AtomicInteger invocations = new AtomicInteger();
 
         @Override
-        public AmazonEC2 buildEc2(CloudConfig config, AWSStaticCredentialsProvider provider) {
+        public Ec2Client buildEc2(CloudConfig config, StaticCredentialsProvider provider) {
             invocations.incrementAndGet();
             return ec2;
         }
 
         @Override
-        public AmazonCloudWatch buildCloudWatch(CloudConfig config, AWSStaticCredentialsProvider provider) {
+        public CloudWatchClient buildCloudWatch(CloudConfig config, StaticCredentialsProvider provider) {
             invocations.incrementAndGet();
             return cloudWatch;
         }
 
         @Override
-        public AmazonAutoScaling buildAutoScaling(CloudConfig config, AWSStaticCredentialsProvider provider) {
+        public AutoScalingClient buildAutoScaling(CloudConfig config, StaticCredentialsProvider provider) {
             invocations.incrementAndGet();
             return autoScaling;
         }
