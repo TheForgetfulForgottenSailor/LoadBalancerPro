@@ -47,6 +47,20 @@ class LaseShadowReplayReaderTest {
     }
 
     @Test
+    void utf8BomOnFirstLineIsAccepted() throws Exception {
+        LaseShadowReplayReader reader = new LaseShadowReplayReader();
+        Path replayFile = tempDir.resolve("bom.jsonl");
+        String line = "\uFEFF" + reader.toJsonLine(LaseShadowReplayRecord.fromEvent(
+                event("eval-1", "S1", "S1", "HOLD", true)));
+        Files.writeString(replayFile, line);
+
+        List<LaseShadowReplayRecord> records = reader.readAll(replayFile);
+
+        assertEquals(1, records.size());
+        assertEquals("eval-1", records.get(0).event().evaluationId());
+    }
+
+    @Test
     void missingFileIsRejectedSafely() {
         Path missing = tempDir.resolve("missing.jsonl");
 

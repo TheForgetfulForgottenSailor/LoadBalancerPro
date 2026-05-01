@@ -53,6 +53,9 @@ public final class LaseShadowReplayReader {
             int lineNumber = 0;
             while ((line = reader.readLine()) != null) {
                 lineNumber++;
+                if (lineNumber == 1 && line.startsWith("\uFEFF")) {
+                    line = line.substring(1);
+                }
                 if (line.length() > maxLineLength) {
                     throw new LaseShadowReplayException(
                             "Replay input line " + lineNumber + " exceeds maximum replay line length");
