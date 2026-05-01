@@ -64,6 +64,13 @@ class CloudSandboxProfileConfigurationTest {
     }
 
     @Test
+    void cloudSandboxProfileKeepsMetricsExportDisabledByDefault() {
+        assertEquals("false", environment.getProperty("management.prometheus.metrics.export.enabled"));
+        assertEquals("false", environment.getProperty("management.otlp.metrics.export.enabled"));
+        assertEquals("cloud-sandbox", environment.getProperty("management.metrics.tags.environment"));
+    }
+
+    @Test
     void cloudSandboxProfileStartsWithoutAwsCredentialsAndKeepsHealthPublic() throws Exception {
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk())

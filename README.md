@@ -502,6 +502,15 @@ http://localhost:8080/actuator/prometheus
 
 Domain metrics include allocation counters/gauges, parsing failures, and cloud scale decisions with source and reason tags.
 
+OpenTelemetry-compatible OTLP metrics export is available through Micrometer and is disabled by default. To opt in for a local collector:
+
+```properties
+management.otlp.metrics.export.enabled=true
+management.otlp.metrics.export.url=http://localhost:4318/v1/metrics
+```
+
+Metrics include stable `application` and `environment` tags plus OpenTelemetry resource attributes for `service.name`, `service.version`, and `deployment.environment`.
+
 The `prod` profile exposes only `/actuator/health` and `/actuator/info` by default. Keep metrics and Prometheus behind deployment-specific network and authentication controls before enabling them outside a demo environment.
 
 ## CLI
