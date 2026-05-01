@@ -34,6 +34,13 @@ class ProdProfileConfigurationTest {
     }
 
     @Test
+    void prodProfileKeepsMetricsExportDisabledByDefault() {
+        assertEquals("false", environment.getProperty("management.prometheus.metrics.export.enabled"));
+        assertEquals("false", environment.getProperty("management.otlp.metrics.export.enabled"));
+        assertEquals("prod", environment.getProperty("management.metrics.tags.environment"));
+    }
+
+    @Test
     void prodProfileKeepsLaseShadowAdvisorDisabledByDefault() {
         assertFalse(allocatorService.isLaseShadowEnabledForTesting());
     }
