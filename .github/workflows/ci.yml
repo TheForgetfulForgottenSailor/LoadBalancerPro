@@ -150,6 +150,76 @@ jobs:
       - name: Build Docker image
         run: docker build -t loadbalancerpro:ci .
 
+      - name: Smoke test Docker runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTAINER_NAME="loadbalancerpro-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          cleanup() {
+            local status=$?
+            if [ "$status" -ne 0 ]; then
+              docker logs "$CONTAINER_NAME" 2>/dev/null || true
+            fi
+            docker stop "$CONTAINER_NAME" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          docker run --rm -d \
+            --name "$CONTAINER_NAME" \
+            -p 127.0.0.1:18081:8080 \
+            loadbalancerpro:ci
+
+          for attempt in {1..60}; do
+            if curl -fsS -o /dev/null http://127.0.0.1:18081/api/health; then
+              echo "Docker runtime health endpoint returned HTTP 200."
+              break
+            fi
+
+            if ! docker ps --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
+              echo "Container exited before becoming healthy."
+              docker logs "$CONTAINER_NAME" 2>/dev/null || true
+              exit 1
+            fi
+
+            if [ "$attempt" -eq 60 ]; then
+              echo "Container did not return HTTP 200 from /api/health in time."
+              docker logs "$CONTAINER_NAME" 2>/dev/null || true
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          for attempt in {1..30}; do
+            health_status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CONTAINER_NAME")"
+            if [ "$health_status" = "healthy" ]; then
+              echo "Docker healthcheck is healthy."
+              exit 0
+            fi
+            if [ "$health_status" = "unhealthy" ]; then
+              echo "Docker healthcheck became unhealthy."
+              docker logs "$CONTAINER_NAME" 2>/dev/null || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "Docker healthcheck did not become healthy in time."
+          docker inspect "$CONTAINER_NAME"
+          exit 1
+
+      - name: Scan Docker image
+        uses: aquasecurity/trivy-action@0.24.0
+        continue-on-error: true
+        with:
+          image-ref: loadbalancerpro:ci
+          format: table
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '0'
+
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest

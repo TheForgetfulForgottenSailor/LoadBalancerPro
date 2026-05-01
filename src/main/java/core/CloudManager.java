@@ -676,20 +676,52 @@ public class CloudManager {
     }
 
     private void logZeroCopy(String message, Object... args) {
+        String formattedMessage = formatLogMessage(message, args);
         if (logChannel != null && logChannel.isOpen()) {
             try {
                 if (logChannel.size() > config.getMaxLogFileSize()) {
                     rotateLogChannel();
                 }
-                String formatted = String.format("[%s] %s%n", Instant.now(), String.format(message, args));
+                String formatted = String.format("[%s] %s%n", Instant.now(), formattedMessage);
                 ByteBuffer buffer = ByteBuffer.wrap(formatted.getBytes(StandardCharsets.UTF_8));
                 logChannel.write(buffer);
             } catch (IOException e) {
                 logger.error("Zero-copy logging failed: {}", e.getMessage(), e);
-                logger.info(message, args);
+                logger.info(formattedMessage);
             }
         } else {
-            logger.info(message, args);
+            logger.info(formattedMessage);
+        }
+    }
+
+    private static String formatLogMessage(String message, Object... args) {
+        if (message == null) {
+            return "";
+        }
+        if (args == null || args.length == 0) {
+            return message;
+        }
+        if (message.contains("{}")) {
+            StringBuilder builder = new StringBuilder(message.length() + args.length * 8);
+            int cursor = 0;
+            int argIndex = 0;
+            int placeholder;
+            while ((placeholder = message.indexOf("{}", cursor)) >= 0 && argIndex < args.length) {
+                builder.append(message, cursor, placeholder);
+                builder.append(String.valueOf(args[argIndex++]));
+                cursor = placeholder + 2;
+            }
+            builder.append(message.substring(cursor));
+            if (argIndex < args.length) {
+                builder.append(' ')
+                        .append(Arrays.toString(Arrays.copyOfRange(args, argIndex, args.length)));
+            }
+            return builder.toString();
+        }
+        try {
+            return String.format(message, args);
+        } catch (IllegalFormatException e) {
+            return message + " " + Arrays.toString(args);
         }
     }
 

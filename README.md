@@ -48,7 +48,7 @@ Roadmap backlog:
 - CSV/JSON handling validates schemas, handles robust CSV quoting, rejects malformed records, and neutralizes spreadsheet formula injection.
 - API hardening includes request-size enforcement, safe JSON error envelopes, validation response consistency, CORS coverage, and security headers.
 - Concurrency and lifecycle cleanup removed unsafe shared hashing state, bounded cache risk, and clarified CLI monitor shutdown ownership.
-- The default Maven test suite currently covers 359 tests with zero skipped tests and uses mocked cloud clients for cloud-adjacent coverage.
+- The default Maven test suite currently covers 360 tests with zero skipped tests and uses mocked cloud clients for cloud-adjacent coverage.
 - CI release gates verify tests, packaging, packaged-JAR smoke startup, dependency review on pull requests, and Docker image builds.
 - Docker runtime hardening runs the app as a non-root user and exposes a Docker healthcheck backed by `/api/health`.
 - The internal LASE telemetry-driven routing foundation models server state, scores tail-latency and pressure signals, samples candidates deterministically in tests, and emits explainable routing decisions.
@@ -194,6 +194,30 @@ If `LOADBALANCERPRO_API_KEY` is missing or blank, protected prod-profile API req
 
 The prod-profile API key is a minimal client-auth gate. It is not full user identity, RBAC, OAuth, production authorization, or secret rotation. Before using the prod profile beyond a local demo, add deployment-specific auth, TLS or trusted proxy termination, secret management, actuator/network lockdown, logging retention, and live-cloud change controls. This profile is a safer baseline for review, not a claim that the app is ready for unmanaged production traffic.
 
+## Production Deployment Considerations
+
+LoadBalancerPro is designed as a portfolio/enterprise-demo system. The `prod` profile is a safer deployment starting point, not a complete production security system.
+
+Recommended deployment boundary:
+
+- Terminate TLS at a trusted reverse proxy or ingress such as nginx, Traefik, or a managed load balancer.
+- Keep the app bound to a private interface or container network; expose only the proxy publicly.
+- Configure the proxy to pass `Forwarded` or `X-Forwarded-*` headers, then enable `server.forward-headers-strategy=framework` through deployment config or by uncommenting the documented prod-profile setting.
+- Add external rate limiting and request filtering at the proxy or gateway layer.
+- Keep `/actuator/health` and `/actuator/info` behind private networking, firewall rules, or deployment-specific auth when running outside a local demo.
+- Send logs and metrics to your normal monitoring stack, with retention and access controls appropriate for operational data.
+- Store secrets in environment variables, a secret manager, or orchestrator-managed secret injection. Do not commit secrets, `.env` files, shell history, or generated logs containing sensitive values.
+
+Example local validation behind a trusted proxy configuration:
+
+```bash
+LOADBALANCERPRO_API_KEY=replace-with-random-deployment-secret \
+SERVER_FORWARD_HEADERS_STRATEGY=framework \
+java -jar target/LoadBalancerPro-1.0.0-rc1.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=prod
+```
+
+The API key is passed through `LOADBALANCERPRO_API_KEY`, mapped to `loadbalancerpro.api.key`, and is never documented as a real value. Rotate it outside the application and avoid logging request headers at the proxy.
+
 ## Safe LASE Synthetic Demo
 
 The packaged JAR can print deterministic, synthetic LASE evaluation reports without starting the API server:
@@ -263,9 +287,13 @@ java -jar "$JAR" --lase-demo=overloaded
 java -jar "$JAR" --lase-demo=invalid-name
 java -jar "$JAR" --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
 docker build -t loadbalancerpro:ci .
+docker run --rm -d --name loadbalancerpro-ci -p 127.0.0.1:18081:8080 loadbalancerpro:ci
+curl -fsS http://127.0.0.1:18081/api/health
+docker inspect --format='{{.State.Health.Status}}' loadbalancerpro-ci
+docker stop loadbalancerpro-ci
 ```
 
-The LASE demo smoke checks run deterministic synthetic reports, verify safe failure for an invalid scenario name, and confirm the demo path does not emit Spring startup markers. The packaged JAR smoke test binds the app to `127.0.0.1`, waits for `GET /api/health` to return HTTP 200, then stops the local process. CI does not use AWS credentials, does not require live cloud resources, and does not create, modify, or delete AWS infrastructure. Pull requests also run GitHub's dependency review action for changed dependencies and fail on high-severity findings. Broader dependency lifecycle work, such as the AWS SDK v2 migration noted below, remains tracked separately.
+The LASE demo smoke checks run deterministic synthetic reports, verify safe failure for an invalid scenario name, and confirm the demo path does not emit Spring startup markers. The packaged JAR smoke test binds the app to `127.0.0.1`, waits for `GET /api/health` to return HTTP 200, then stops the local process. CI builds the Docker image, starts the container on a loopback-bound host port, verifies `/api/health`, waits for the Docker healthcheck to become healthy, stops the container, and runs an informational Trivy image scan. CI does not use AWS credentials, does not require live cloud resources, and does not create, modify, or delete AWS infrastructure. Pull requests also run GitHub's dependency review action for changed dependencies and fail on high-severity findings. Broader dependency lifecycle work, such as the AWS SDK v2 migration noted below, remains tracked separately.
 
 ## Docker
 

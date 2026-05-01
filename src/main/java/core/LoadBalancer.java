@@ -128,7 +128,7 @@ public class LoadBalancer {
             serverMap.put(server.getServerId(), server);
             loadQueue.offer(server);
             precomputeHashRingEntries(server);
-            logger.info("Added server {} ({})", server.getServerId(), server.getServerType());
+            logger.debug("Added server {} ({})", server.getServerId(), server.getServerType());
         } finally {
             serverLock.writeLock().unlock();
         }
