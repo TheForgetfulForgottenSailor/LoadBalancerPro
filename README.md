@@ -48,6 +48,7 @@ The release evidence set lives in [`evidence/`](evidence/):
 
 - [`HARDENING_AUDIT_001.md`](evidence/HARDENING_AUDIT_001.md) captures the formal hardening audit results.
 - [`SECURITY_POSTURE.md`](evidence/SECURITY_POSTURE.md) summarizes current auth, telemetry, cloud, replay, LASE, and input/API posture.
+- [`THREAT_MODEL.md`](evidence/THREAT_MODEL.md) documents assets, trust boundaries, threat scenarios, mitigations, and residual risks.
 - [`TEST_EVIDENCE.md`](evidence/TEST_EVIDENCE.md) maps major safety claims to Maven test coverage.
 - [`RESIDUAL_RISKS.md`](evidence/RESIDUAL_RISKS.md) lists known residual risks and deployment responsibilities.
 
