@@ -51,7 +51,7 @@ The release evidence set lives in [`evidence/`](evidence/):
 - [`THREAT_MODEL.md`](evidence/THREAT_MODEL.md) documents assets, trust boundaries, threat scenarios, mitigations, and residual risks.
 - [`SAFETY_INVARIANTS.md`](evidence/SAFETY_INVARIANTS.md) defines non-negotiable safety rules and maps them to current evidence.
 - [`TEST_EVIDENCE.md`](evidence/TEST_EVIDENCE.md) maps major safety claims to Maven test coverage.
-- [`RESIDUAL_RISKS.md`](evidence/RESIDUAL_RISKS.md) lists known residual risks and deployment responsibilities.
+- [`RESIDUAL_RISKS.md`](evidence/RESIDUAL_RISKS.md) tracks ranked residual risks with owners, status, evidence, and next actions.
 
 ## Hardened Foundation Checklist
 
