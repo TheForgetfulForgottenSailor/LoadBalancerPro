@@ -18,6 +18,7 @@ Reference evidence:
 - `evidence/RESIDUAL_RISKS.md`
 - `evidence/TEST_EVIDENCE.md`
 - `evidence/HARDENING_AUDIT_001.md`
+- `evidence/SUPPLY_CHAIN_EVIDENCE.md`
 
 ## Scoring Scale
 
@@ -216,17 +217,18 @@ Suggested next hardening action: Add a release checklist that requires confirmin
 
 Score: 58/100.
 
-Why this score: CI release gates and dependency review are documented, and the Maven test suite provides broad behavioral regression coverage after dependency changes. However, there is not yet a documented SBOM, dependency audit cadence, accepted-risk record for dependencies, or independent supply-chain evidence.
+Why this score: CI release gates, dependency review, and current dependency/build posture are documented, and the Maven test suite provides broad behavioral regression coverage after dependency changes. Phase 6A added `evidence/SUPPLY_CHAIN_EVIDENCE.md` as a factual baseline. The score remains conservative because no SBOM/CycloneDX tooling, OWASP dependency-check report, digest pinning, GitHub Actions SHA pinning, automated dependency management, or dependency triage workflow has been added yet.
 
 Evidence references:
 
 - `README.md`
 - `evidence/THREAT_MODEL.md`
 - `evidence/RESIDUAL_RISKS.md`
+- `evidence/SUPPLY_CHAIN_EVIDENCE.md`
 
-Residual risks preventing a higher score: Dependency/supply-chain drift is explicitly tracked as `RR-010`. No SBOM/CycloneDX evidence is currently part of the evidence set. Dependency audit cadence and accepted dependency risks are not yet documented.
+Residual risks preventing a higher score: Dependency/supply-chain drift is explicitly tracked as `RR-010`. The supply-chain evidence page is documentation, not a generated SBOM or vulnerability scan. No SBOM/CycloneDX evidence, OWASP dependency-check report, dependency audit cadence, automated dependency update workflow, or accepted dependency-risk process is currently in place.
 
-Suggested next hardening action: Add SBOM/CycloneDX evidence, define dependency audit cadence, and document accepted dependency risks before release tags.
+Suggested next hardening action: Add SBOM/CycloneDX evidence, define dependency audit cadence, document accepted dependency risks, and consider digest/SHA pinning after the triage process exists.
 
 ## How to Raise the Score
 
