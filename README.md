@@ -42,6 +42,15 @@ Roadmap backlog:
 - Live AWS behavior requires explicit configuration, operator intent, capacity/account/region guardrails, and dry-run opt-out.
 - This repository is intended as a portfolio/enterprise-demo implementation, not production cloud infrastructure ready to operate unmanaged traffic.
 
+## Evidence and Hardening
+
+The release evidence set lives in [`evidence/`](evidence/):
+
+- [`HARDENING_AUDIT_001.md`](evidence/HARDENING_AUDIT_001.md) captures the formal hardening audit results.
+- [`SECURITY_POSTURE.md`](evidence/SECURITY_POSTURE.md) summarizes current auth, telemetry, cloud, replay, LASE, and input/API posture.
+- [`TEST_EVIDENCE.md`](evidence/TEST_EVIDENCE.md) maps major safety claims to Maven test coverage.
+- [`RESIDUAL_RISKS.md`](evidence/RESIDUAL_RISKS.md) lists known residual risks and deployment responsibilities.
+
 ## Hardened Foundation Checklist
 
 - Cloud mutation guardrails fail closed for unsafe ASG creation, describe failures before scaling, and non-owned instance registration.
