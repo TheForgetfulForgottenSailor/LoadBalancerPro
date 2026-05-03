@@ -10,7 +10,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 
-public final class TailLatencyPowerOfTwoStrategy {
+public final class TailLatencyPowerOfTwoStrategy implements RoutingStrategy {
     public static final String STRATEGY_NAME = "TAIL_LATENCY_POWER_OF_TWO";
 
     private final ServerScoreCalculator scoreCalculator;
@@ -27,6 +27,12 @@ public final class TailLatencyPowerOfTwoStrategy {
         this.clock = Objects.requireNonNull(clock, "clock cannot be null");
     }
 
+    @Override
+    public RoutingStrategyId id() {
+        return RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO;
+    }
+
+    @Override
     public RoutingDecision choose(List<ServerStateVector> servers) {
         Objects.requireNonNull(servers, "servers cannot be null");
         List<ServerStateVector> eligible = servers.stream()
