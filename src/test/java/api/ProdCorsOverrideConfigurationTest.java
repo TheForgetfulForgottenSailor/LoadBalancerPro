@@ -6,9 +6,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = {
@@ -62,5 +65,18 @@ class ProdCorsOverrideConfigurationTest {
                 .andExpect(header().string("Access-Control-Allow-Origin", "https://app.example.com"))
                 .andExpect(header().string("Access-Control-Allow-Methods", containsString("PATCH")))
                 .andExpect(header().string("Access-Control-Allow-Headers", containsString("Authorization")));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"GET", "POST", "PUT", "PATCH", "OPTIONS"})
+    void prodProfileAllowsAuthorizationCorsPreflightForApiMethods(String method) throws Exception {
+        mockMvc.perform(options("/api/allocate/capacity-aware")
+                        .header(HttpHeaders.ORIGIN, "https://app.example.com")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, method)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://app.example.com"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, containsString(method)))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, containsString("Authorization")));
     }
 }

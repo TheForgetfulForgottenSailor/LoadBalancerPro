@@ -97,6 +97,16 @@ class OAuth2AuthorizationTest {
     }
 
     @Test
+    void oauth2ModeRejectsObserverAllocationRequestsWith403() throws Exception {
+        mockMvc.perform(allocationRequest().header(HttpHeaders.AUTHORIZATION, "Bearer observer-token"))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status", is(403)))
+                .andExpect(jsonPath("$.error", is("forbidden")))
+                .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")));
+    }
+
+    @Test
     void oauth2ModeAllowsOperatorAllocationRequests() throws Exception {
         mockMvc.perform(allocationRequest().header(HttpHeaders.AUTHORIZATION, "Bearer roles-operator-token"))
                 .andExpect(status().isOk())
@@ -169,6 +179,14 @@ class OAuth2AuthorizationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.openapi").exists());
+    }
+
+    @Test
+    void oauth2ModeGatesSwaggerUiByDefault() throws Exception {
+        mockMvc.perform(get("/swagger-ui.html"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.error", is("unauthorized")));
     }
 
     @Test

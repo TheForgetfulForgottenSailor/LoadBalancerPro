@@ -569,7 +569,7 @@ public class LoadBalancer {
         try {
             advisor.observe(strategyName, getServers(), totalData, result);
         } catch (RuntimeException e) {
-            logger.warn("LASE shadow observation failed safely: {}", e.getMessage());
+            logger.warn("LASE shadow observation failed safely: {}", LaseShadowAdvisor.safeFailureReason(e));
         }
     }
 

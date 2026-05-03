@@ -70,6 +70,37 @@ class ProdApiKeyProtectionTest {
     }
 
     @Test
+    void prodProfileRejectsOversizedUnauthenticatedMutationBeforeRequestSizeFilter() throws Exception {
+        String oversizedBody = """
+                {
+                  "requestedLoad": 10.0,
+                  "servers": [
+                    {
+                      "id": "%s",
+                      "cpuUsage": 10.0,
+                      "memoryUsage": 20.0,
+                      "diskUsage": 30.0,
+                      "capacity": 100.0,
+                      "weight": 1.0,
+                      "healthy": true
+                    }
+                  ]
+                }
+                """.formatted("S".repeat(20_000));
+
+        mockMvc.perform(post("/api/allocate/capacity-aware")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(oversizedBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.error", is("unauthorized")))
+                .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")))
+                .andExpect(jsonPath("$.trace").doesNotExist())
+                .andExpect(jsonPath("$.exception").doesNotExist());
+    }
+
+    @Test
     void prodProfileRejectsAllocationRequestWithWrongApiKeyWithoutLeakingConfiguredKey() throws Exception {
         mockMvc.perform(allocationRequest().header("X-API-Key", "WRONG_TEST_KEY"))
                 .andExpect(status().isUnauthorized())

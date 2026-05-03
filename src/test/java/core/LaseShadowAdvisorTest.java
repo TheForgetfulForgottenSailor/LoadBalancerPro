@@ -4,6 +4,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
+import org.slf4j.LoggerFactory;
+
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -141,6 +145,118 @@ class LaseShadowAdvisorTest {
     }
 
     @Test
+    void advisorUsesSafeFallbackForNullFailureMessage() {
+        LaseShadowEventLog eventLog = new LaseShadowEventLog(10);
+        LaseShadowAdvisor advisor = throwingAdvisor(new IllegalStateException((String) null), eventLog);
+
+        Optional<LaseEvaluationReport> report = advisor.observe(
+                "CAPACITY_AWARE", servers(), 60.0,
+                new LoadDistributionResult(Map.of("S1", 25.0), 0.0));
+
+        assertTrue(report.isEmpty());
+        assertEquals("shadow evaluation failed safely",
+                eventLog.snapshot().recentEvents().get(0).failureReason());
+    }
+
+    @Test
+    void advisorUsesSafeFallbackForBlankFailureMessage() {
+        LaseShadowEventLog eventLog = new LaseShadowEventLog(10);
+        LaseShadowAdvisor advisor = throwingAdvisor(new IllegalStateException("   "), eventLog);
+
+        Optional<LaseEvaluationReport> report = advisor.observe(
+                "CAPACITY_AWARE", servers(), 60.0,
+                new LoadDistributionResult(Map.of("S1", 25.0), 0.0));
+
+        assertTrue(report.isEmpty());
+        assertEquals("shadow evaluation failed safely",
+                eventLog.snapshot().recentEvents().get(0).failureReason());
+    }
+
+    @Test
+    void advisorPreservesUsefulContextAfterRedaction() {
+        LaseShadowEventLog eventLog = new LaseShadowEventLog(10);
+        LaseShadowAdvisor advisor = throwingAdvisor(new IllegalStateException(
+                "advisor timeout for server api-1 token=raw-token while scoring CAPACITY_AWARE"), eventLog);
+
+        advisor.observe("CAPACITY_AWARE", servers(), 60.0,
+                new LoadDistributionResult(Map.of("S1", 25.0), 0.0));
+
+        String failureReason = eventLog.snapshot().recentEvents().get(0).failureReason();
+        assertTrue(failureReason.contains("advisor timeout"));
+        assertTrue(failureReason.contains("server api-1"));
+        assertTrue(failureReason.contains("CAPACITY_AWARE"));
+        assertTrue(failureReason.contains("[redacted]"));
+        assertFalse(failureReason.contains("raw-token"));
+    }
+
+    @Test
+    void failureFollowedBySuccessDoesNotLeakStaleFailureReason() {
+        LaseShadowEventLog eventLog = new LaseShadowEventLog(10);
+        LaseEvaluationEngine engine = deterministicEngine();
+        AtomicInteger calls = new AtomicInteger();
+        LaseShadowAdvisor advisor = new LaseShadowAdvisor(true, (input, config) -> {
+            if (calls.incrementAndGet() == 1) {
+                throw new IllegalStateException("first failure token=raw-token");
+            }
+            return engine.evaluate(input, config);
+        }, CLOCK, eventLog);
+
+        advisor.observe("CAPACITY_AWARE", servers(), 60.0,
+                new LoadDistributionResult(Map.of("S1", 25.0), 0.0));
+        advisor.observe("CAPACITY_AWARE", servers(), 60.0,
+                new LoadDistributionResult(Map.of("S1", 25.0, "S2", 35.0), 0.0));
+
+        LaseShadowObservabilitySnapshot snapshot = eventLog.snapshot();
+        assertEquals(2, snapshot.recentEvents().size());
+        assertTrue(snapshot.recentEvents().get(0).failSafe());
+        assertNotNull(snapshot.recentEvents().get(0).failureReason());
+        assertFalse(snapshot.recentEvents().get(1).failSafe());
+        assertNull(snapshot.recentEvents().get(1).failureReason());
+        assertEquals(1, snapshot.summary().failSafeCount());
+    }
+
+    @Test
+    void advisorNeutralizesControlCharacterOnlyFailureMessages() {
+        LaseShadowEventLog eventLog = new LaseShadowEventLog(10);
+        LaseShadowAdvisor advisor = throwingAdvisor(new IllegalStateException("\r\n\t"), eventLog);
+
+        advisor.observe("CAPACITY_AWARE", servers(), 60.0,
+                new LoadDistributionResult(Map.of("S1", 25.0), 0.0));
+
+        String failureReason = eventLog.snapshot().recentEvents().get(0).failureReason();
+        assertEquals("shadow evaluation failed safely", failureReason);
+        assertFalse(failureReason.contains("\r"));
+        assertFalse(failureReason.contains("\n"));
+        assertFalse(failureReason.contains("\t"));
+    }
+
+    @Test
+    void loadBalancerOuterShadowObservationCatchDoesNotLogRawSensitiveMessage() {
+        LaseShadowAdvisor advisor = Mockito.mock(LaseShadowAdvisor.class);
+        Mockito.when(advisor.isEnabled()).thenReturn(true);
+        Mockito.when(advisor.observe(Mockito.anyString(), Mockito.anyList(), Mockito.anyDouble(), Mockito.any()))
+                .thenThrow(new IllegalStateException(
+                        "outer observer failed token=raw-token Bearer raw-bearer-secret for CAPACITY_AWARE"));
+        LoadBalancer balancer = balancerWithServers();
+        balancer.setLaseShadowAdvisorForTesting(advisor);
+        ListAppender<ILoggingEvent> appender = attachLoadBalancerAppender();
+        try {
+            LoadDistributionResult result = balancer.capacityAwareWithResult(60.0);
+
+            assertFalse(result.allocations().isEmpty());
+            String logMessages = messages(appender);
+            assertTrue(logMessages.contains("outer observer failed"));
+            assertTrue(logMessages.contains("CAPACITY_AWARE"));
+            assertTrue(logMessages.contains("[redacted]"));
+            assertFalse(logMessages.contains("raw-token"));
+            assertFalse(logMessages.contains("raw-bearer-secret"));
+        } finally {
+            detachLoadBalancerAppender(appender);
+            balancer.shutdown();
+        }
+    }
+
+    @Test
     void advisorFailsSafelyWhenDistributionResultIsMissing() {
         Optional<LaseEvaluationReport> report = deterministicAdvisor(true)
                 .observe("CAPACITY_AWARE", servers(), 60.0, null);
@@ -225,13 +341,23 @@ class LaseShadowAdvisorTest {
     }
 
     private static LaseShadowAdvisor deterministicAdvisor(boolean enabled, LaseShadowEventLog eventLog) {
-        LaseEvaluationEngine engine = new LaseEvaluationEngine(
+        LaseEvaluationEngine engine = deterministicEngine();
+        return new LaseShadowAdvisor(enabled, engine, CLOCK, eventLog);
+    }
+
+    private static LaseShadowAdvisor throwingAdvisor(RuntimeException exception, LaseShadowEventLog eventLog) {
+        return new LaseShadowAdvisor(true, (input, config) -> {
+            throw exception;
+        }, CLOCK, eventLog);
+    }
+
+    private static LaseEvaluationEngine deterministicEngine() {
+        return new LaseEvaluationEngine(
                 new TailLatencyPowerOfTwoStrategy(new ServerScoreCalculator(), new Random(7), CLOCK),
                 new LoadSheddingPolicy(),
                 new ShadowAutoscaler(),
                 new FailureScenarioRunner(),
                 CLOCK);
-        return new LaseShadowAdvisor(enabled, engine, CLOCK, eventLog);
     }
 
     private static LoadBalancer balancerWithServers() {
@@ -248,5 +374,27 @@ class LaseShadowAdvisorTest {
         Server second = new Server("S2", 10.0, 10.0, 10.0);
         second.setCapacity(100.0);
         return List.of(first, second);
+    }
+
+    private static ListAppender<ILoggingEvent> attachLoadBalancerAppender() {
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(LoadBalancer.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    private static void detachLoadBalancerAppender(ListAppender<ILoggingEvent> appender) {
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(LoadBalancer.class);
+        logger.detachAppender(appender);
+        appender.stop();
+    }
+
+    private static String messages(ListAppender<ILoggingEvent> appender) {
+        return appender.list.stream()
+                .map(ILoggingEvent::getFormattedMessage)
+                .reduce("", (left, right) -> left + "\n" + right);
     }
 }

@@ -405,6 +405,8 @@ docker stop loadbalancerpro-ci
 
 The LASE demo smoke checks run deterministic synthetic reports, verify safe failure for an invalid scenario name, and confirm the demo path does not emit Spring startup markers. The packaged JAR smoke test binds the app to `127.0.0.1`, waits for `GET /api/health` to return HTTP 200, then stops the local process. CI builds the Docker image, starts the container on a loopback-bound host port, verifies `/api/health`, waits for the Docker healthcheck to become healthy, stops the container, and runs a blocking Trivy image scan for fixed high/critical OS and library vulnerabilities. CI does not use AWS credentials, does not require live cloud resources, and does not create, modify, or delete AWS infrastructure. Pull requests also run GitHub's dependency review action for changed dependencies and fail on high-severity findings. The guarded CloudManager integration uses AWS SDK for Java 2.x while keeping dry-run and cloud-sandbox guardrails in place.
 
+GitHub Actions are pinned to reviewed commit SHAs, with comments preserving the upstream action names and version tags for update review. Docker base images are pinned by digest in the Dockerfile; update the tag and digest together in a focused PR after rebuilding, running the test/package/JAR/Docker smokes, and reviewing the Trivy result.
+
 The Trivy allowlist file is `.trivyignore`. Keep it empty unless a finding has been reviewed and accepted temporarily. Any allowlist entry should be added in a focused PR with the vulnerability ID, affected package or image layer, owner, reason for temporary acceptance, and an expiry or follow-up issue. Do not use the allowlist to hide broad dependency drift.
 
 ## Docker
@@ -418,6 +420,8 @@ docker build -t loadbalancerpro:local .
 ```
 
 The Docker build is self-contained and creates the packaged JAR inside the build stage; no local AWS credentials or prebuilt JAR are required.
+
+The build and runtime base images are pinned by digest for reproducibility. Treat digest refreshes as supply-chain changes: update the digest intentionally, rebuild the image, run the container health smoke, and review the vulnerability scan before merging.
 
 Run the API for a local demo:
 

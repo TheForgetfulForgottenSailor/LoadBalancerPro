@@ -496,6 +496,24 @@ class UtilsTest {
     }
 
     @Test
+    void testImportServerLogsRejectsNonFiniteJsonNumericValues() throws IOException {
+        logger.info("Testing JSON import rejects non-finite numeric values");
+        String json = "["
+            + "{\"serverId\":\"NONFINITE\",\"cpuUsage\":1e9999,\"memoryUsage\":20.0,\"diskUsage\":30.0},"
+            + "{\"serverId\":\"" + TEST_SERVER_ID_2 + "\",\"cpuUsage\":20.0,\"memoryUsage\":30.0,\"diskUsage\":40.0}"
+            + "]";
+        Path jsonFile = createTestFile("nonfinite-json.json", json);
+
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
+            () -> Utils.importServerLogs(jsonFile.toString(), JSON_FORMAT, balancer),
+            "Non-finite JSON metrics should fail closed before importing later entries!");
+
+        assertTrue(thrown.getMessage().contains("must be finite"),
+                "Schema error should identify the non-finite metric!");
+        assertEquals(0, balancer.getServers().size(), "Rejected JSON should not partially import servers!");
+    }
+
+    @Test
     void testImportServerLogsRejectsUnexpectedJsonSchemaFields() throws IOException {
         logger.info("Testing JSON schema rejects unexpected fields");
         String json = "{\"version\":1,\"timestamp\":\"2026-04-29 15:00:00\",\"servers\":["

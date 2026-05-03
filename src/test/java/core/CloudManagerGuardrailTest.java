@@ -467,6 +467,68 @@ class CloudManagerGuardrailTest {
     }
 
     @Test
+    void liveSandboxScaleWithoutResourcePrefixDoesNotUpdateAutoScalingGroup() throws InterruptedException {
+        AutoScalingClient autoScaling = mock(AutoScalingClient.class);
+        CloudConfig config = liveConfigWithAccountGuardrails(
+                CLOUD_ENVIRONMENT_PROPERTY, "sandbox",
+                CLOUD_ALLOWED_AWS_ACCOUNT_IDS_PROPERTY, ALLOWED_ACCOUNT_ID,
+                CLOUD_CURRENT_AWS_ACCOUNT_ID_PROPERTY, ALLOWED_ACCOUNT_ID,
+                CLOUD_ALLOWED_REGIONS_PROPERTY, "us-east-1");
+        when(autoScaling.describeAutoScalingGroups(any(DescribeAutoScalingGroupsRequest.class)))
+                .thenReturn(asgDescribeResultWithDesiredCapacity(config, 0));
+        CloudManager manager = new CloudManager(new LoadBalancer(), config, null, null, autoScaling, null);
+        AtomicBoolean callbackResult = new AtomicBoolean(true);
+
+        scaleAndWait(manager, 1, callbackResult::set);
+
+        assertFalse(callbackResult.get(), "Sandbox live scale must fail closed without a resource prefix.");
+        verify(autoScaling, never()).updateAutoScalingGroup(any(UpdateAutoScalingGroupRequest.class));
+    }
+
+    @Test
+    void liveSandboxScaleWithIncorrectResourcePrefixDoesNotUpdateAutoScalingGroup() throws InterruptedException {
+        AutoScalingClient autoScaling = mock(AutoScalingClient.class);
+        CloudConfig config = liveConfigWithAccountGuardrails(
+                CLOUD_ENVIRONMENT_PROPERTY, "sandbox",
+                CloudConfig.RESOURCE_NAME_PREFIX_PROPERTY, "prod-",
+                CLOUD_ALLOWED_AWS_ACCOUNT_IDS_PROPERTY, ALLOWED_ACCOUNT_ID,
+                CLOUD_CURRENT_AWS_ACCOUNT_ID_PROPERTY, ALLOWED_ACCOUNT_ID,
+                CLOUD_ALLOWED_REGIONS_PROPERTY, "us-east-1");
+        when(autoScaling.describeAutoScalingGroups(any(DescribeAutoScalingGroupsRequest.class)))
+                .thenReturn(asgDescribeResultWithDesiredCapacity(config, 0));
+        CloudManager manager = new CloudManager(new LoadBalancer(), config, null, null, autoScaling, null);
+        AtomicBoolean callbackResult = new AtomicBoolean(true);
+
+        scaleAndWait(manager, 1, callbackResult::set);
+
+        assertFalse(callbackResult.get(), "Sandbox live scale must require the documented sandbox resource prefix.");
+        verify(autoScaling, never()).updateAutoScalingGroup(any(UpdateAutoScalingGroupRequest.class));
+    }
+
+    @Test
+    void liveSandboxScaleWithCorrectResourcePrefixUpdatesOnlyPrefixedAutoScalingGroup()
+            throws InterruptedException {
+        AutoScalingClient autoScaling = mock(AutoScalingClient.class);
+        CloudConfig config = liveConfigWithAccountGuardrails(
+                CLOUD_ENVIRONMENT_PROPERTY, "sandbox",
+                CloudConfig.RESOURCE_NAME_PREFIX_PROPERTY, "lbp-sandbox-",
+                CLOUD_ALLOWED_AWS_ACCOUNT_IDS_PROPERTY, ALLOWED_ACCOUNT_ID,
+                CLOUD_CURRENT_AWS_ACCOUNT_ID_PROPERTY, ALLOWED_ACCOUNT_ID,
+                CLOUD_ALLOWED_REGIONS_PROPERTY, "us-east-1");
+        when(autoScaling.describeAutoScalingGroups(any(DescribeAutoScalingGroupsRequest.class)))
+                .thenReturn(asgDescribeResultWithDesiredCapacity(config, 0));
+        CloudManager manager = new CloudManager(new LoadBalancer(), config, null, null, autoScaling, null);
+        AtomicBoolean callbackResult = new AtomicBoolean(false);
+
+        scaleAndWait(manager, 1, callbackResult::set);
+
+        assertTrue(callbackResult.get(), "Correct sandbox prefix should pass existing live mutation guardrails.");
+        verify(autoScaling).updateAutoScalingGroup(argThat((UpdateAutoScalingGroupRequest request) ->
+                request.desiredCapacity() == 1
+                        && request.autoScalingGroupName().startsWith("lbp-sandbox-LoadBalancerPro-ASG-")));
+    }
+
+    @Test
     void liveSandboxScaleWithPrefixAccountRegionAndIntentPassesExistingGuardrails() throws Exception {
         String auditLog = auditLogForScale(1,
                 CloudConfig.ALLOW_LIVE_MUTATION_PROPERTY, "true",
