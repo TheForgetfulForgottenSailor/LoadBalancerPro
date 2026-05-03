@@ -49,6 +49,7 @@ import java.util.stream.Collectors;
 public class CloudManager {
     private static final Logger logger = LogManager.getLogger(CloudManager.class);
     private static final String REQUIRED_LIVE_MUTATION_INTENT = "LOADBALANCERPRO_LIVE_MUTATION";
+    private static final String REQUIRED_SANDBOX_RESOURCE_NAME_PREFIX = "lbp-sandbox-";
 
     private final CloudAwsClients awsClients;
     private final LoadBalancer balancer;
@@ -851,6 +852,12 @@ public class CloudManager {
         if (isSandboxEnvironment() && config.getResourceNamePrefix().isBlank()) {
             auditScaleDecision("DENY", desiredCapacity, currentCapacity, scaleStep, source,
                     "SANDBOX_RESOURCE_PREFIX_MISSING");
+            return false;
+        }
+        if (isSandboxEnvironment()
+                && !config.getResourceNamePrefix().startsWith(REQUIRED_SANDBOX_RESOURCE_NAME_PREFIX)) {
+            auditScaleDecision("DENY", desiredCapacity, currentCapacity, scaleStep, source,
+                    "SANDBOX_RESOURCE_PREFIX_INVALID");
             return false;
         }
         if (isSandboxEnvironment()

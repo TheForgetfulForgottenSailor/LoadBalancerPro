@@ -45,4 +45,16 @@ public record ApiErrorResponse(int status, String error, String message, String 
                 "Authenticated principal does not have the required role for this endpoint",
                 path, Instant.now().toString(), List.of());
     }
+
+    public static ApiErrorResponse methodNotAllowed(String path) {
+        return new ApiErrorResponse(405, "method_not_allowed",
+                "HTTP method is not supported for this endpoint",
+                path, Instant.now().toString(), List.of());
+    }
+
+    public static ApiErrorResponse unsupportedMediaType(String path) {
+        return new ApiErrorResponse(415, "unsupported_media_type",
+                "Content type is not supported for this endpoint",
+                path, Instant.now().toString(), List.of());
+    }
 }

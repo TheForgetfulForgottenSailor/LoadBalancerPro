@@ -3,10 +3,12 @@ package api;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -227,6 +229,149 @@ class AllocatorControllerTest {
     }
 
     @Test
+    void allocationRejectsNullServerListWithSafeErrorShape() throws Exception {
+        mockMvc.perform(post("/api/allocate/capacity-aware")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestedLoad": 10.0,
+                                  "servers": null
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error", is("validation_failed")))
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")))
+                .andExpect(jsonPath("$.details").isArray())
+                .andExpect(jsonPath("$.trace").doesNotExist())
+                .andExpect(jsonPath("$.exception").doesNotExist());
+    }
+
+    @Test
+    void allocationRejectsEmptyServerListWithSafeErrorShape() throws Exception {
+        mockMvc.perform(post("/api/allocate/capacity-aware")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestedLoad": 10.0,
+                                  "servers": []
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error", is("validation_failed")))
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")))
+                .andExpect(jsonPath("$.details").isArray())
+                .andExpect(jsonPath("$.trace").doesNotExist())
+                .andExpect(jsonPath("$.exception").doesNotExist());
+    }
+
+    @Test
+    void missingRequestBodyReturnsSafeErrorShape() throws Exception {
+        mockMvc.perform(post("/api/allocate/capacity-aware")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.error", is("bad_request")))
+                .andExpect(jsonPath("$.message", is("Malformed JSON request body")))
+                .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")))
+                .andExpect(jsonPath("$.trace").doesNotExist())
+                .andExpect(jsonPath("$.exception").doesNotExist());
+    }
+
+    @Test
+    void missingRequestedLoadCurrentlyDefaultsToZero() throws Exception {
+        mockMvc.perform(post("/api/allocate/capacity-aware")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "servers": [
+                                    {
+                                      "id": "api-1",
+                                      "cpuUsage": 10.0,
+                                      "memoryUsage": 20.0,
+                                      "diskUsage": 30.0,
+                                      "capacity": 100.0,
+                                      "weight": 1.0,
+                                      "healthy": true
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.allocations.api-1", closeTo(0.0, 0.01)))
+                .andExpect(jsonPath("$.unallocatedLoad", closeTo(0.0, 0.01)))
+                .andExpect(jsonPath("$.recommendedAdditionalServers", is(0)))
+                .andExpect(jsonPath("$.error").doesNotExist());
+    }
+
+    @Test
+    void missingServerNumericFieldCurrentlyDefaultsToZero() throws Exception {
+        mockMvc.perform(post("/api/allocate/capacity-aware")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestedLoad": 10.0,
+                                  "servers": [
+                                    {
+                                      "id": "api-1",
+                                      "memoryUsage": 20.0,
+                                      "diskUsage": 30.0,
+                                      "capacity": 100.0,
+                                      "weight": 1.0,
+                                      "healthy": true
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.allocations.api-1").isNumber())
+                .andExpect(jsonPath("$.unallocatedLoad").isNumber())
+                .andExpect(jsonPath("$.error").doesNotExist());
+    }
+
+    @Test
+    void veryLargeFiniteRequestedLoadReturnsSafeFiniteJson() throws Exception {
+        String responseBody = mockMvc.perform(post("/api/allocate/capacity-aware")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestedLoad": 1000000000.0,
+                                  "servers": [
+                                    {
+                                      "id": "api-1",
+                                      "cpuUsage": 10.0,
+                                      "memoryUsage": 20.0,
+                                      "diskUsage": 30.0,
+                                      "capacity": 100.0,
+                                      "weight": 1.0,
+                                      "healthy": true
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.allocations.api-1").isNumber())
+                .andExpect(jsonPath("$.unallocatedLoad").isNumber())
+                .andExpect(jsonPath("$.recommendedAdditionalServers").isNumber())
+                .andExpect(jsonPath("$.error").doesNotExist())
+                .andExpect(jsonPath("$.trace").doesNotExist())
+                .andExpect(jsonPath("$.exception").doesNotExist())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertFalse(responseBody.contains("Infinity"), "Response must not serialize overflow-looking Infinity values.");
+        assertFalse(responseBody.contains("NaN"), "Response must not serialize NaN values.");
+        assertFalse(responseBody.contains("stackTrace"), "Response must not leak stack traces.");
+    }
+
+    @Test
     void allocationRejectsInvalidServerInput() throws Exception {
         mockMvc.perform(post("/api/allocate/predictive")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -249,6 +394,44 @@ class AllocatorControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error", is("validation_failed")))
                 .andExpect(jsonPath("$.details").isArray());
+    }
+
+    @Test
+    void invalidHttpMethodReturnsSafeErrorShape() throws Exception {
+        mockMvc.perform(put("/api/allocate/capacity-aware")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestedLoad": 10.0,
+                                  "servers": []
+                                }
+                                """))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status", is(405)))
+                .andExpect(jsonPath("$.error", is("method_not_allowed")))
+                .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")))
+                .andExpect(jsonPath("$.trace").doesNotExist())
+                .andExpect(jsonPath("$.exception").doesNotExist());
+    }
+
+    @Test
+    void invalidContentTypeReturnsSafeErrorShape() throws Exception {
+        mockMvc.perform(post("/api/allocate/capacity-aware")
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .content("""
+                                {
+                                  "requestedLoad": 10.0,
+                                  "servers": []
+                                }
+                                """))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status", is(415)))
+                .andExpect(jsonPath("$.error", is("unsupported_media_type")))
+                .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")))
+                .andExpect(jsonPath("$.trace").doesNotExist())
+                .andExpect(jsonPath("$.exception").doesNotExist());
     }
 
     @Test

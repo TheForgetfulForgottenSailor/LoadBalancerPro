@@ -213,7 +213,10 @@ public final class LaseShadowAdvisor {
         return Double.isFinite(value) && value > 0.0 ? value : 0.0;
     }
 
-    private String safeFailureReason(RuntimeException exception) {
+    static String safeFailureReason(Throwable exception) {
+        if (exception == null) {
+            return "shadow evaluation failed safely";
+        }
         String message = exception.getMessage();
         if (message == null || message.isBlank()) {
             return "shadow evaluation failed safely";
