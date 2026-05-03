@@ -35,7 +35,7 @@ class AllocatorControllerTest {
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("ok")))
-                .andExpect(jsonPath("$.version", is("1.2.1")));
+                .andExpect(jsonPath("$.version", is("1.3.1")));
     }
 
     @Test
