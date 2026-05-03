@@ -1,0 +1,12 @@
+* @richmond423
+
+/src/main/java/core/CloudManager.java @richmond423
+/src/main/java/api/ @richmond423
+/src/main/java/core/RoutingStrategy*.java @richmond423
+/src/main/java/core/*Routing*.java @richmond423
+/src/main/java/core/*Strategy.java @richmond423
+/Dockerfile @richmond423
+/.github/workflows/ @richmond423
+/pom.xml @richmond423
+/evidence/ @richmond423
+/docs/ @richmond423
