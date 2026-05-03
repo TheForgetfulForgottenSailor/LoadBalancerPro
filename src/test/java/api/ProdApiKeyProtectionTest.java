@@ -40,6 +40,21 @@ class ProdApiKeyProtectionTest {
               ]
             }
             """;
+    private static final String ROUTING_REQUEST_BODY = """
+            {
+              "servers": [
+                {
+                  "serverId": "green",
+                  "healthy": true,
+                  "inFlightRequestCount": 1,
+                  "averageLatencyMillis": 10.0,
+                  "p95LatencyMillis": 20.0,
+                  "p99LatencyMillis": 30.0,
+                  "recentErrorRate": 0.0
+                }
+              ]
+            }
+            """;
 
     @Autowired
     private MockMvc mockMvc;
@@ -120,6 +135,35 @@ class ProdApiKeyProtectionTest {
     }
 
     @Test
+    void prodProfileRejectsRoutingCompareWithoutApiKey() throws Exception {
+        mockMvc.perform(routingCompareRequest())
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.error", is("unauthorized")))
+                .andExpect(jsonPath("$.path", is("/api/routing/compare")));
+    }
+
+    @Test
+    void prodProfileRejectsRoutingCompareWithWrongApiKeyWithoutLeakingConfiguredKey() throws Exception {
+        mockMvc.perform(routingCompareRequest().header("X-API-Key", "WRONG_TEST_KEY"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().string(not(containsString(API_KEY))))
+                .andExpect(content().string(not(containsString("WRONG_TEST_KEY"))))
+                .andExpect(jsonPath("$.error", is("unauthorized")))
+                .andExpect(jsonPath("$.path", is("/api/routing/compare")));
+    }
+
+    @Test
+    void prodProfileAllowsRoutingCompareWithCorrectApiKey() throws Exception {
+        mockMvc.perform(routingCompareRequest().header("X-API-Key", API_KEY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requestedStrategies[0]", is("TAIL_LATENCY_POWER_OF_TWO")))
+                .andExpect(jsonPath("$.results[0].status", is("SUCCESS")))
+                .andExpect(jsonPath("$.error").doesNotExist());
+    }
+
+    @Test
     void prodProfileKeepsApiHealthPublic() throws Exception {
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk())
@@ -156,5 +200,11 @@ class ProdApiKeyProtectionTest {
         return post("/api/allocate/capacity-aware")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(REQUEST_BODY);
+    }
+
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder routingCompareRequest() {
+        return post("/api/routing/compare")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(ROUTING_REQUEST_BODY);
     }
 }

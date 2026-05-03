@@ -39,6 +39,21 @@ class CloudSandboxProfileConfigurationTest {
               ]
             }
             """;
+    private static final String ROUTING_REQUEST_BODY = """
+            {
+              "servers": [
+                {
+                  "serverId": "green",
+                  "healthy": true,
+                  "inFlightRequestCount": 1,
+                  "averageLatencyMillis": 10.0,
+                  "p95LatencyMillis": 20.0,
+                  "p99LatencyMillis": 30.0,
+                  "recentErrorRate": 0.0
+                }
+              ]
+            }
+            """;
 
     @Autowired
     private MockMvc mockMvc;
@@ -103,6 +118,18 @@ class CloudSandboxProfileConfigurationTest {
     }
 
     @Test
+    void cloudSandboxProfileProtectsRoutingCompare() throws Exception {
+        mockMvc.perform(routingCompareRequest())
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.path", is("/api/routing/compare")));
+
+        mockMvc.perform(routingCompareRequest().header("X-API-Key", API_KEY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].strategyId", is("TAIL_LATENCY_POWER_OF_TWO")));
+    }
+
+    @Test
     void cloudSandboxProfileProtectsLaseShadowObservability() throws Exception {
         mockMvc.perform(get("/api/lase/shadow"))
                 .andExpect(status().isUnauthorized())
@@ -117,5 +144,11 @@ class CloudSandboxProfileConfigurationTest {
         return post("/api/allocate/capacity-aware")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(REQUEST_BODY);
+    }
+
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder routingCompareRequest() {
+        return post("/api/routing/compare")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(ROUTING_REQUEST_BODY);
     }
 }

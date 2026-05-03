@@ -54,6 +54,9 @@ class OAuth2AuthorizationTest {
               ]
             }
             """;
+    private static final String ROUTING_REQUEST_BODY = """
+            {"servers":[{"serverId":"green","healthy":true,"inFlightRequestCount":1,"averageLatencyMillis":10.0,"p95LatencyMillis":20.0,"p99LatencyMillis":30.0,"recentErrorRate":0.0}]}
+            """;
 
     @Autowired
     private MockMvc mockMvc;
@@ -111,6 +114,35 @@ class OAuth2AuthorizationTest {
         mockMvc.perform(allocationRequest().header(HttpHeaders.AUTHORIZATION, "Bearer roles-operator-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.allocations.api-1").isNumber())
+                .andExpect(jsonPath("$.error").doesNotExist());
+    }
+
+    @Test
+    void oauth2ModeRejectsViewerRoutingCompareRequestsWith403() throws Exception {
+        mockMvc.perform(routingCompareRequest().header(HttpHeaders.AUTHORIZATION, "Bearer viewer-token"))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status", is(403)))
+                .andExpect(jsonPath("$.error", is("forbidden")))
+                .andExpect(jsonPath("$.path", is("/api/routing/compare")));
+    }
+
+    @Test
+    void oauth2ModeRejectsObserverRoutingCompareRequestsWith403() throws Exception {
+        mockMvc.perform(routingCompareRequest().header(HttpHeaders.AUTHORIZATION, "Bearer observer-token"))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status", is(403)))
+                .andExpect(jsonPath("$.error", is("forbidden")))
+                .andExpect(jsonPath("$.path", is("/api/routing/compare")));
+    }
+
+    @Test
+    void oauth2ModeAllowsOperatorRoutingCompareRequests() throws Exception {
+        mockMvc.perform(routingCompareRequest().header(HttpHeaders.AUTHORIZATION, "Bearer roles-operator-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requestedStrategies[0]", is("TAIL_LATENCY_POWER_OF_TWO")))
+                .andExpect(jsonPath("$.results[0].status", is("SUCCESS")))
                 .andExpect(jsonPath("$.error").doesNotExist());
     }
 
@@ -227,6 +259,12 @@ class OAuth2AuthorizationTest {
         return post("/api/allocate/capacity-aware")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(REQUEST_BODY);
+    }
+
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder routingCompareRequest() {
+        return post("/api/routing/compare")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(ROUTING_REQUEST_BODY);
     }
 
     @TestConfiguration
