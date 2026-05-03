@@ -1,14 +1,14 @@
-# LoadBalancerPro Manual SBOM Guide
+# LoadBalancerPro SBOM Guide
 
-Date: 2026-05-01  
-Branch: `codex/cyclonedx-sbom-audit`  
-Verification command: `mvn -q test`
+Date: 2026-05-03
+Branch: `feature/v1.5.0-ci-sbom-artifacts`
+Verification commands: `mvn -q test`, `mvn -q -DskipTests package`, `mvn -B org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -DoutputFormat=all -DoutputDirectory=target -DoutputName=bom -Dcyclonedx.skipAttach=true`
 
 ## Purpose and Scope
 
-This guide documents a manually invoked CycloneDX Software Bill of Materials (SBOM) generation path for LoadBalancerPro.
+This guide documents CycloneDX Software Bill of Materials (SBOM) generation for LoadBalancerPro.
 
-It is documentation only. It does not change production code, `pom.xml`, dependencies, Maven plugins, CI workflows, Docker behavior, or release gates. It does not commit generated SBOM files.
+It covers both the manually invoked local command and the CI-generated SBOM artifact path. It does not change production code, `pom.xml`, dependencies, Maven plugin configuration, Docker behavior, or runtime behavior. It does not commit generated SBOM files.
 
 This guide is intended to improve repeatable dependency inventory evidence while keeping supply-chain claims conservative.
 
@@ -38,6 +38,27 @@ It does not prove:
 
 SBOM inventory should complement GitHub dependency review, Trivy image scanning, future dependency-check tooling, and human dependency triage. It does not replace them.
 
+## CI SBOM Artifacts
+
+CI generates CycloneDX SBOM files after the executable JAR package step by invoking the CycloneDX Maven plugin directly:
+
+```sh
+mvn -B org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom \
+  -DoutputFormat=all \
+  -DoutputDirectory=target \
+  -DoutputName=bom \
+  -Dcyclonedx.skipAttach=true
+```
+
+The CI workflow uploads these files as a GitHub Actions artifact named `loadbalancerpro-sbom`:
+
+- `target/bom.json`
+- `target/bom.xml`
+
+The artifact is retained for 30 days. Generated SBOM files remain build outputs under `target/` and are not committed to the repository.
+
+The CI SBOM artifact is component inventory only. Trivy image scanning and GitHub dependency review remain the vulnerability gates currently configured in CI.
+
 ## Manual CycloneDX Command
 
 Windows Command Prompt:
@@ -48,6 +69,16 @@ mvn -q org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom ^
   -DoutputDirectory=target ^
   -DoutputName=bom ^
   -Dcyclonedx.skipAttach=true
+```
+
+PowerShell:
+
+```powershell
+mvn -B org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom `
+  "-DoutputFormat=all" `
+  "-DoutputDirectory=target" `
+  "-DoutputName=bom" `
+  "-Dcyclonedx.skipAttach=true"
 ```
 
 Unix/macOS shell:
@@ -71,16 +102,15 @@ The command writes generated SBOM files under `target/`:
 
 These files are generated artifacts. They should be reviewed or attached to release evidence when needed, but they are not source files.
 
-## Why Generated SBOM Files Are Not Committed Yet
+## Why Generated SBOM Files Are Not Committed
 
 `target/` is ignored by `.gitignore`, so generated SBOM files are not committed by default.
 
-Phase 6B intentionally does not commit generated SBOM files because:
+Generated SBOM files are intentionally kept out of source control because:
 
 - Generated inventory can become stale whenever dependencies, plugins, Maven resolution, or build inputs change.
-- Committed SBOM files can imply stronger continuous evidence than the project currently provides.
-- The project has not yet defined a release artifact retention policy for generated SBOMs.
-- The project has not yet added SBOM generation to CI or release gates.
+- Committed SBOM files can imply stronger or longer-lived evidence than the project currently provides.
+- CI already publishes SBOM files as short-lived workflow artifacts, which keeps inventory tied to a specific run.
 
 Future release processes may choose to publish SBOM files as versioned release artifacts instead of committing them to the source tree.
 
@@ -92,7 +122,6 @@ This command:
 
 - Does not change production code.
 - Does not add a Maven plugin to `pom.xml`.
-- Does not change CI.
 - Does not run OWASP dependency-check.
 - Does not perform vulnerability analysis.
 - Does not contact a vulnerability database by itself.
@@ -109,11 +138,11 @@ Test libraries still matter to evidence quality and supply-chain review, but run
 
 Conservative next steps:
 
-- Capture generated SBOMs as release artifacts outside the source tree.
+- Consider publishing generated SBOMs as durable release artifacts outside the source tree.
 - Add a documented dependency update cadence and accepted dependency-risk triage process.
 - Add a pinned CycloneDX plugin configuration to `pom.xml` only after manual generation proves useful.
-- Add CI SBOM generation after deciding retention, review, and failure behavior.
+- Add CodeQL or equivalent SAST after defining triage expectations.
+- Add artifact attestations after release artifact naming and publishing are stable.
 - Consider Docker image SBOM generation separately from Maven dependency SBOMs.
 - Consider OWASP dependency-check after a triage and false-positive handling process exists.
-- Consider Docker base image digest pinning.
-- Consider GitHub Actions commit-SHA pinning where maintainability tradeoffs are acceptable.
+- Consider container signing after registry and image naming decisions are made.

@@ -35,6 +35,19 @@ jobs:
       - name: Package executable JAR
         run: mvn -B package
 
+      - name: Generate CycloneDX SBOM
+        run: mvn -B org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -DoutputFormat=all -DoutputDirectory=target -DoutputName=bom -Dcyclonedx.skipAttach=true
+
+      - name: Upload CycloneDX SBOM artifacts
+        # actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: loadbalancerpro-sbom
+          path: |
+            target/bom.json
+            target/bom.xml
+          retention-days: 30
+
       - name: Smoke test LASE demo command
         shell: bash
         run: |

@@ -1,8 +1,8 @@
 # LoadBalancerPro Supply Chain Evidence
 
-Date: 2026-05-01  
-Branch: `codex/supply-chain-evidence`  
-Verification command: `mvn -q test`
+Date: 2026-05-03
+Branch: `feature/v1.5.0-ci-sbom-artifacts`
+Verification commands: `mvn -q test`, `mvn -q -DskipTests package`, `mvn -B org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -DoutputFormat=all -DoutputDirectory=target -DoutputName=bom -Dcyclonedx.skipAttach=true`
 
 ## Purpose and Scope
 
@@ -25,9 +25,9 @@ Related evidence:
 
 LoadBalancerPro is a Java 17 Maven project with Spring Boot, AWS SDK v2, Spring Security/OAuth2, Micrometer telemetry libraries, JavaFX GUI support, JSON parsing utilities, caching, Reactor, and test dependencies.
 
-The project currently uses Maven dependency management for the largest framework families and pins build plugins directly in `pom.xml`. CI runs dependency resolution, tests, packaging, smoke checks, Docker image build/runtime checks, Trivy image scanning, and GitHub dependency review for pull requests.
+The project currently uses Maven dependency management for the largest framework families and pins build plugins directly in `pom.xml`. CI runs dependency resolution, tests, packaging, smoke checks, CycloneDX SBOM generation, Docker image build/runtime checks, Trivy image scanning, and GitHub dependency review for pull requests.
 
-This posture provides useful regression and review evidence, but it is not yet a full supply-chain evidence program because no generated SBOM, dependency-audit report, dependency update cadence, or accepted dependency-risk workflow is committed. Manual CycloneDX SBOM generation is documented in `evidence/SBOM_GUIDE.md`, but it is not integrated into `pom.xml`, CI, or release gates.
+This posture provides useful regression and review evidence, but it is not yet a full supply-chain provenance program because no CodeQL/SAST workflow, release artifact attestation, artifact signing, container signing, or accepted dependency-risk workflow is committed. CycloneDX SBOM generation is documented in `evidence/SBOM_GUIDE.md` and now runs in CI without adding a CycloneDX plugin to `pom.xml`.
 
 ## BOM-Managed Dependencies
 
@@ -78,6 +78,8 @@ Current GitHub Actions behavior includes:
 - Maven dependency resolution through `mvn -B -DskipTests dependency:tree`.
 - Full Maven tests through `mvn -B test`.
 - Packaging through `mvn -B package`.
+- CycloneDX SBOM generation through direct `org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom` invocation.
+- Upload of `target/bom.json` and `target/bom.xml` as a GitHub Actions artifact named `loadbalancerpro-sbom`.
 - Packaged JAR smoke checks.
 - Docker image build and runtime health smoke checks.
 - Trivy image scan for fixed high/critical OS and library vulnerabilities.
@@ -85,20 +87,29 @@ Current GitHub Actions behavior includes:
 
 The repository also includes `.trivyignore`, documented as empty-by-default. Allowlist use is expected to be temporary and reviewed, with vulnerability ID, affected package or layer, owner, reason, and expiry or follow-up.
 
+## Current Automation And Pinning
+
+- Dependabot is configured for Maven, GitHub Actions, and Docker on a weekly schedule.
+- GitHub Actions are pinned to reviewed commit SHAs, with comments preserving upstream action names and version tags.
+- Docker build and runtime base images are pinned by digest in `Dockerfile`.
+- The CycloneDX Maven plugin is invoked directly with explicit version `2.9.1` instead of being added to `pom.xml`.
+
 ## Known Gaps
 
 Known gaps as of this evidence pass:
 
-- Manual CycloneDX SBOM generation is documented in `evidence/SBOM_GUIDE.md`, but no generated SBOM files are committed in Phase 6B.
-- CycloneDX is not integrated into `pom.xml` or CI yet.
+- Generated SBOM files are uploaded as CI artifacts but are not durable release artifacts yet.
+- CycloneDX is not integrated into `pom.xml`, by design for the current phase.
 - No OWASP dependency-check report exists yet.
 - CI dependency tree output is generated but not captured as durable evidence.
-- No Dependabot or Renovate configuration was found.
-- Docker base images are tag-pinned, not digest-pinned.
-- GitHub Actions are tag-pinned, not commit-SHA pinned.
 - Some direct dependency versions are explicit and outside the Spring Boot or AWS BOMs.
 - `log4j-core` is a direct dependency and should remain review-sensitive.
 - There is no formal dependency update cadence or accepted dependency-risk register beyond the residual risk entry in `evidence/RESIDUAL_RISKS.md`.
+- No CodeQL or equivalent SAST workflow exists yet.
+- No GitHub artifact attestation workflow exists yet.
+- No release artifact signing exists yet.
+- No container signing exists yet.
+- No registry or release image signing policy exists yet.
 
 ## Higher-Sensitivity Dependency Areas
 
@@ -122,18 +133,19 @@ Review this evidence and the dependency posture:
 - After Docker base image updates.
 - After GitHub Actions workflow or action-version changes.
 - After adding SBOM, dependency-check, Dependabot, Renovate, digest pinning, or action SHA pinning.
+- After adding CodeQL/SAST, artifact attestations, release signing, or container signing.
 
 ## Future Hardening Options
 
 Practical next steps, in conservative order:
 
-- Use the manually invoked CycloneDX SBOM guide first, before making SBOM generation a release gate.
+- Keep CI SBOM artifact generation stable and review generated artifacts during release preparation.
 - Define a dependency update cadence and dependency-risk triage process.
-- Capture dependency tree output or SBOM artifacts as durable release evidence.
+- Capture dependency tree output or SBOM artifacts as durable release evidence when release artifact publishing is defined.
 - Document accepted dependency risks with owner, severity, expiry, and follow-up action.
-- Consider digest pinning for Docker base images.
-- Consider GitHub Actions commit-SHA pinning where maintainability tradeoffs are acceptable.
-- Consider Dependabot or Renovate after defining review ownership and cadence.
+- Add CodeQL or equivalent SAST after defining triage expectations.
+- Add GitHub artifact attestations after release artifact naming and publishing are stable.
+- Add container signing after registry and image naming decisions are made.
 - Consider OWASP dependency-check after a triage and false-positive handling process exists.
 
 ## What This Evidence Does Not Prove
@@ -145,6 +157,7 @@ This document does not prove:
 - Container base images are immutable or vulnerability-free.
 - GitHub Actions are immune to tag movement or action supply-chain compromise.
 - The Maven repository, CI runner, Docker registry, or developer workstation is trusted.
+- Uploaded SBOM artifacts prove artifact provenance or runtime integrity.
 - Runtime deployment uses secure TLS, IAM, firewalling, egress policy, secret rotation, or artifact provenance.
 - Live AWS behavior has been validated by this documentation pass.
 
