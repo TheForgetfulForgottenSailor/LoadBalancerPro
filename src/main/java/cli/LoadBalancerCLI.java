@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
  */
 public class LoadBalancerCLI {
     private static final Logger logger = LogManager.getLogger(LoadBalancerCLI.class);
-    private static final String VERSION = "1.0.0";
+    private static final String VERSION = "1.1.1";
 
     public static void main(String[] args) {
         LaseReplayCommand.Result replayResult = LaseReplayCommand.runIfRequested(args, System.out, System.err);

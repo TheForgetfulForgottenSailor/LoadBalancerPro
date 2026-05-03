@@ -94,7 +94,7 @@ Use `mvn clean package` when you want to remove stale local build artifacts befo
 Run the packaged API locally:
 
 ```bash
-java -jar target/LoadBalancerPro-1.0.0.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
+java -jar target/LoadBalancerPro-1.1.1.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
 ```
 
 Verify the health endpoint:
@@ -114,7 +114,7 @@ mvn spring-boot:run
 ```bash
 mvn test
 mvn package
-java -jar target/LoadBalancerPro-1.0.0.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
+java -jar target/LoadBalancerPro-1.1.1.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
 curl http://127.0.0.1:18080/api/health
 docker build -t loadbalancerpro:local .
 docker run --rm --name loadbalancerpro-demo -p 127.0.0.1:8080:8080 loadbalancerpro:local
@@ -128,7 +128,7 @@ Start the local/demo API first:
 
 ```bash
 mvn package
-java -jar target/LoadBalancerPro-1.0.0.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
+java -jar target/LoadBalancerPro-1.1.1.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
 ```
 
 The commands below use `hey` against `127.0.0.1` only and do not require AWS credentials, live cloud resources, or CloudManager configuration.
@@ -182,7 +182,7 @@ The default/local profile is for development, CI smoke tests, and portfolio demo
 Run the local/demo profile explicitly:
 
 ```bash
-java -jar target/LoadBalancerPro-1.0.0.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
+java -jar target/LoadBalancerPro-1.1.1.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=local
 ```
 
 The `prod` profile is an explicit opt-in production-like starting point, not full production readiness. It keeps `cloud.liveMode=false`, does not require AWS credentials just to start, exposes only Actuator health/info by default, leaves browser CORS origins empty unless configured through `LOADBALANCERPRO_CORS_ALLOWED_ORIGINS`, and protects API mutation/allocation endpoints with the `X-API-Key` header when `loadbalancerpro.auth.mode=api-key` is active.
@@ -192,7 +192,7 @@ Run the production-like profile locally for validation:
 ```bash
 LOADBALANCERPRO_API_KEY=replace-with-random-local-test-value \
 LOADBALANCERPRO_CORS_ALLOWED_ORIGINS=https://app.example.com \
-java -jar target/LoadBalancerPro-1.0.0.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=prod
+java -jar target/LoadBalancerPro-1.1.1.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=prod
 ```
 
 Call protected prod-profile API endpoints with the configured key:
@@ -231,7 +231,7 @@ Run the sandbox profile locally:
 
 ```bash
 LOADBALANCERPRO_API_KEY=replace-with-random-local-test-value \
-java -jar target/LoadBalancerPro-1.0.0.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=cloud-sandbox
+java -jar target/LoadBalancerPro-1.1.1.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=cloud-sandbox
 ```
 
 Sandbox defaults remain fail-closed:
@@ -289,7 +289,7 @@ Example local validation behind a trusted proxy configuration:
 ```bash
 LOADBALANCERPRO_API_KEY=replace-with-random-deployment-secret \
 SERVER_FORWARD_HEADERS_STRATEGY=framework \
-java -jar target/LoadBalancerPro-1.0.0.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=prod
+java -jar target/LoadBalancerPro-1.1.1.jar --server.address=127.0.0.1 --server.port=18080 --spring.profiles.active=prod
 ```
 
 The API key is passed through `LOADBALANCERPRO_API_KEY`, mapped to `loadbalancerpro.api.key`, and is never documented as a real value. Rotate it outside the application and avoid logging request headers at the proxy.
@@ -300,7 +300,7 @@ The packaged JAR can print deterministic, synthetic LASE evaluation reports with
 
 ```bash
 mvn package
-java -jar target/LoadBalancerPro-1.0.0.jar --lase-demo=healthy
+java -jar target/LoadBalancerPro-1.1.1.jar --lase-demo=healthy
 ```
 
 This is a safe internal control-plane demo only. It is recommendation-only, uses synthetic inputs, does not touch live AWS resources, does not call `CloudManager`, does not mutate real routing state, does not require the API server, does not require AWS credentials, and does not require network access.
@@ -308,14 +308,14 @@ This is a safe internal control-plane demo only. It is recommendation-only, uses
 Available demo commands:
 
 ```bash
-java -jar target/LoadBalancerPro-1.0.0.jar --lase-demo
-java -jar target/LoadBalancerPro-1.0.0.jar --lase-demo=all
-java -jar target/LoadBalancerPro-1.0.0.jar --lase-demo=healthy
-java -jar target/LoadBalancerPro-1.0.0.jar --lase-demo=overloaded
-java -jar target/LoadBalancerPro-1.0.0.jar --lase-demo=error-storm
-java -jar target/LoadBalancerPro-1.0.0.jar --lase-demo=partial-outage
-java -jar target/LoadBalancerPro-1.0.0.jar --lase-demo=low-sample
-java -jar target/LoadBalancerPro-1.0.0.jar --lase-demo=invalid-name
+java -jar target/LoadBalancerPro-1.1.1.jar --lase-demo
+java -jar target/LoadBalancerPro-1.1.1.jar --lase-demo=all
+java -jar target/LoadBalancerPro-1.1.1.jar --lase-demo=healthy
+java -jar target/LoadBalancerPro-1.1.1.jar --lase-demo=overloaded
+java -jar target/LoadBalancerPro-1.1.1.jar --lase-demo=error-storm
+java -jar target/LoadBalancerPro-1.1.1.jar --lase-demo=partial-outage
+java -jar target/LoadBalancerPro-1.1.1.jar --lase-demo=low-sample
+java -jar target/LoadBalancerPro-1.1.1.jar --lase-demo=invalid-name
 ```
 
 `--lase-demo` and `--lase-demo=all` print every scenario. Named scenarios print only that scenario. Invalid names fail safely with exit code `2`, print valid scenario names, and do not emit a raw stack trace.
@@ -355,7 +355,7 @@ Saved LASE shadow events can be replayed locally from JSON Lines without startin
 
 ```bash
 mvn package
-java -jar target/LoadBalancerPro-1.0.0.jar --lase-replay=shadow-events.jsonl
+java -jar target/LoadBalancerPro-1.1.1.jar --lase-replay=shadow-events.jsonl
 ```
 
 Replay mode is offline, read-only, and deterministic for a fixed input file. It does not change routing, does not call `CloudManager`, does not touch AWS resources, does not parse PCAP files, does not use Wireshark, does not open sockets, and does not require network access or AWS credentials. It evaluates previously saved shadow-observability records only; it is not a durable production telemetry store.
