@@ -93,7 +93,7 @@ class RoutingControllerTest {
     }
 
     @Test
-    void missingStrategiesDefaultsToRegisteredTailLatencyPowerOfTwoStrategy() throws Exception {
+    void missingStrategiesDefaultsToRegisteredRoutingStrategiesInOrder() throws Exception {
         mockMvc.perform(routingCompare("""
                         {
                           "servers": [
@@ -111,8 +111,65 @@ class RoutingControllerTest {
                         """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requestedStrategies[0]", is("TAIL_LATENCY_POWER_OF_TWO")))
+                .andExpect(jsonPath("$.requestedStrategies[1]", is("WEIGHTED_LEAST_LOAD")))
                 .andExpect(jsonPath("$.results[0].strategyId", is("TAIL_LATENCY_POWER_OF_TWO")))
-                .andExpect(jsonPath("$.results[0].chosenServerId", is("green")));
+                .andExpect(jsonPath("$.results[0].chosenServerId", is("green")))
+                .andExpect(jsonPath("$.results[1].strategyId", is("WEIGHTED_LEAST_LOAD")))
+                .andExpect(jsonPath("$.results[1].chosenServerId", is("green")));
+    }
+
+    @Test
+    void explicitWeightedLeastLoadRequestUsesRoutingWeightWithoutCloudMutationPath() throws Exception {
+        try (MockedConstruction<CloudManager> mockedCloudManager =
+                     Mockito.mockConstruction(CloudManager.class)) {
+            mockMvc.perform(routingCompare("""
+                            {
+                              "strategies": ["WEIGHTED_LEAST_LOAD"],
+                              "servers": [
+                                {
+                                  "serverId": "base",
+                                  "healthy": true,
+                                  "inFlightRequestCount": 20,
+                                  "configuredCapacity": 100.0,
+                                  "estimatedConcurrencyLimit": 100.0,
+                                  "weight": 1.0,
+                                  "averageLatencyMillis": 10.0,
+                                  "p95LatencyMillis": 20.0,
+                                  "p99LatencyMillis": 40.0,
+                                  "recentErrorRate": 0.0,
+                                  "queueDepth": 0
+                                },
+                                {
+                                  "serverId": "weighted",
+                                  "healthy": true,
+                                  "inFlightRequestCount": 20,
+                                  "configuredCapacity": 100.0,
+                                  "estimatedConcurrencyLimit": 100.0,
+                                  "weight": 4.0,
+                                  "averageLatencyMillis": 10.0,
+                                  "p95LatencyMillis": 20.0,
+                                  "p99LatencyMillis": 40.0,
+                                  "recentErrorRate": 0.0,
+                                  "queueDepth": 0
+                                }
+                              ]
+                            }
+                            """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.requestedStrategies[0]", is("WEIGHTED_LEAST_LOAD")))
+                    .andExpect(jsonPath("$.candidateCount", is(2)))
+                    .andExpect(jsonPath("$.results[0].strategyId", is("WEIGHTED_LEAST_LOAD")))
+                    .andExpect(jsonPath("$.results[0].status", is("SUCCESS")))
+                    .andExpect(jsonPath("$.results[0].chosenServerId", is("weighted")))
+                    .andExpect(jsonPath("$.results[0].candidateServersConsidered[0]", is("base")))
+                    .andExpect(jsonPath("$.results[0].candidateServersConsidered[1]", is("weighted")))
+                    .andExpect(jsonPath("$.results[0].scores.base").isNumber())
+                    .andExpect(jsonPath("$.results[0].scores.weighted").isNumber())
+                    .andExpect(jsonPath("$.error").doesNotExist());
+
+            assertTrue(mockedCloudManager.constructed().isEmpty(),
+                    "Weighted routing comparison must not construct CloudManager or call AWS paths.");
+        }
     }
 
     @Test
@@ -185,6 +242,31 @@ class RoutingControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error", is("bad_request")))
                 .andExpect(jsonPath("$.message", containsString("Unsupported routing strategy")))
+                .andExpect(jsonPath("$.path", is("/api/routing/compare")));
+    }
+
+    @Test
+    void invalidRoutingWeightReturnsStructuredBadRequest() throws Exception {
+        mockMvc.perform(routingCompare("""
+                        {
+                          "strategies": ["WEIGHTED_LEAST_LOAD"],
+                          "servers": [
+                            {
+                              "serverId": "green",
+                              "healthy": true,
+                              "inFlightRequestCount": 1,
+                              "weight": -1.0,
+                              "averageLatencyMillis": 10.0,
+                              "p95LatencyMillis": 20.0,
+                              "p99LatencyMillis": 30.0,
+                              "recentErrorRate": 0.0
+                            }
+                          ]
+                        }
+                        """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", is("bad_request")))
+                .andExpect(jsonPath("$.message", containsString("weight")))
                 .andExpect(jsonPath("$.path", is("/api/routing/compare")));
     }
 

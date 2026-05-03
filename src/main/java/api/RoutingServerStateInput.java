@@ -18,6 +18,8 @@ public record RoutingServerStateInput(
 
         Double estimatedConcurrencyLimit,
 
+        Double weight,
+
         @NotNull(message = "averageLatencyMillis is required")
         Double averageLatencyMillis,
 

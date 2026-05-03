@@ -11,6 +11,7 @@ public record ServerStateVector(
         int inFlightRequestCount,
         OptionalDouble configuredCapacity,
         OptionalDouble estimatedConcurrencyLimit,
+        double weight,
         double averageLatencyMillis,
         double p95LatencyMillis,
         double p99LatencyMillis,
@@ -29,6 +30,7 @@ public record ServerStateVector(
         requireNonNegative(inFlightRequestCount, "inFlightRequestCount");
         configuredCapacity.ifPresent(value -> requireNonNegative(value, "configuredCapacity"));
         estimatedConcurrencyLimit.ifPresent(value -> requirePositive(value, "estimatedConcurrencyLimit"));
+        requireNonNegative(weight, "weight");
         requireNonNegative(averageLatencyMillis, "averageLatencyMillis");
         requireNonNegative(p95LatencyMillis, "p95LatencyMillis");
         requireNonNegative(p99LatencyMillis, "p99LatencyMillis");
@@ -46,8 +48,26 @@ public record ServerStateVector(
                              double p99LatencyMillis,
                              double recentErrorRate,
                              OptionalInt queueDepth,
+                             NetworkAwarenessSignal networkAwarenessSignal,
                              Instant timestamp) {
-        this(serverId, healthy, inFlightRequestCount, configuredCapacity, estimatedConcurrencyLimit,
+        this(serverId, healthy, inFlightRequestCount, configuredCapacity, estimatedConcurrencyLimit, 1.0,
+                averageLatencyMillis, p95LatencyMillis, p99LatencyMillis, recentErrorRate, queueDepth,
+                networkAwarenessSignal, timestamp);
+    }
+
+    public ServerStateVector(String serverId,
+                             boolean healthy,
+                             int inFlightRequestCount,
+                             OptionalDouble configuredCapacity,
+                             OptionalDouble estimatedConcurrencyLimit,
+                             double weight,
+                             double averageLatencyMillis,
+                             double p95LatencyMillis,
+                             double p99LatencyMillis,
+                             double recentErrorRate,
+                             OptionalInt queueDepth,
+                             Instant timestamp) {
+        this(serverId, healthy, inFlightRequestCount, configuredCapacity, estimatedConcurrencyLimit, weight,
                 averageLatencyMillis, p95LatencyMillis, p99LatencyMillis, recentErrorRate, queueDepth,
                 NetworkAwarenessSignal.neutral(serverId, timestamp), timestamp);
     }
@@ -64,7 +84,7 @@ public record ServerStateVector(
                              int queueDepth,
                              Instant timestamp) {
         this(serverId, healthy, inFlightRequestCount, OptionalDouble.of(configuredCapacity),
-                OptionalDouble.of(estimatedConcurrencyLimit), averageLatencyMillis, p95LatencyMillis,
+                OptionalDouble.of(estimatedConcurrencyLimit), 1.0, averageLatencyMillis, p95LatencyMillis,
                 p99LatencyMillis, recentErrorRate, OptionalInt.of(queueDepth),
                 NetworkAwarenessSignal.neutral(serverId, timestamp), timestamp);
     }
@@ -82,7 +102,7 @@ public record ServerStateVector(
                              NetworkAwarenessSignal networkAwarenessSignal,
                              Instant timestamp) {
         this(serverId, healthy, inFlightRequestCount, OptionalDouble.of(configuredCapacity),
-                OptionalDouble.of(estimatedConcurrencyLimit), averageLatencyMillis, p95LatencyMillis,
+                OptionalDouble.of(estimatedConcurrencyLimit), 1.0, averageLatencyMillis, p95LatencyMillis,
                 p99LatencyMillis, recentErrorRate, OptionalInt.of(queueDepth), networkAwarenessSignal, timestamp);
     }
 
@@ -96,7 +116,7 @@ public record ServerStateVector(
                                                Instant timestamp) {
         Objects.requireNonNull(server, "server cannot be null");
         return new ServerStateVector(server.getServerId(), server.isHealthy(), inFlightRequestCount,
-                OptionalDouble.of(server.getCapacity()), OptionalDouble.empty(), averageLatencyMillis,
+                OptionalDouble.of(server.getCapacity()), OptionalDouble.empty(), server.getWeight(), averageLatencyMillis,
                 p95LatencyMillis, p99LatencyMillis, recentErrorRate, OptionalInt.of(queueDepth),
                 NetworkAwarenessSignal.neutral(server.getServerId(), timestamp), timestamp);
     }

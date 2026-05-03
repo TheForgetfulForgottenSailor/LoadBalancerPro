@@ -101,6 +101,7 @@ public class RoutingComparisonService {
                     inFlightRequestCount,
                     optionalFiniteNonNegative(input.configuredCapacity(), "configuredCapacity"),
                     optionalFinitePositive(input.estimatedConcurrencyLimit(), "estimatedConcurrencyLimit"),
+                    optionalWeight(input.weight(), "weight"),
                     averageLatencyMillis,
                     p95LatencyMillis,
                     p99LatencyMillis,
@@ -249,6 +250,16 @@ public class RoutingComparisonService {
             throw new IllegalArgumentException(fieldName + " must be finite and positive");
         }
         return OptionalDouble.of(value);
+    }
+
+    private static double optionalWeight(Double value, String fieldName) {
+        if (value == null || value == 0.0) {
+            return 1.0;
+        }
+        if (!Double.isFinite(value) || value < 0.0) {
+            throw new IllegalArgumentException(fieldName + " must be finite and non-negative");
+        }
+        return value;
     }
 
     private static double requireRate(Double value, String fieldName) {

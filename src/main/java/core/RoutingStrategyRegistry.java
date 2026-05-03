@@ -12,7 +12,7 @@ public final class RoutingStrategyRegistry {
     private final Map<RoutingStrategyId, RoutingStrategy> strategies;
 
     public RoutingStrategyRegistry() {
-        this(List.of(new TailLatencyPowerOfTwoStrategy()));
+        this(List.of(new TailLatencyPowerOfTwoStrategy(), new WeightedLeastLoadStrategy()));
     }
 
     public RoutingStrategyRegistry(Collection<? extends RoutingStrategy> strategies) {

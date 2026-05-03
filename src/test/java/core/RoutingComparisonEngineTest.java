@@ -10,6 +10,7 @@ import core.RoutingStrategyRegistry;
 import core.ServerScoreCalculator;
 import core.ServerStateVector;
 import core.TailLatencyPowerOfTwoStrategy;
+import core.WeightedLeastLoadStrategy;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -43,13 +44,18 @@ class RoutingComparisonEngineTest {
     }
 
     @Test
-    void defaultRegistryReturnsTailLatencyPowerOfTwoStrategy() {
+    void defaultRegistryReturnsTailLatencyPowerOfTwoAndWeightedLeastLoadStrategies() {
         RoutingStrategyRegistry registry = RoutingStrategyRegistry.defaultRegistry();
 
-        assertEquals(List.of(RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO), registry.registeredIds());
+        assertEquals(List.of(
+                RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO,
+                RoutingStrategyId.WEIGHTED_LEAST_LOAD), registry.registeredIds());
         assertTrue(registry.find(RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO).isPresent());
+        assertTrue(registry.find(RoutingStrategyId.WEIGHTED_LEAST_LOAD).isPresent());
         assertEquals(RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO,
                 registry.require(RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO).id());
+        assertEquals(RoutingStrategyId.WEIGHTED_LEAST_LOAD,
+                registry.require(RoutingStrategyId.WEIGHTED_LEAST_LOAD).id());
     }
 
     @Test
@@ -62,6 +68,21 @@ class RoutingComparisonEngineTest {
         assertTrue(emptyRegistry.find(RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO).isEmpty());
         assertThrows(IllegalArgumentException.class,
                 () -> emptyRegistry.require(RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO));
+    }
+
+    @Test
+    void routingStrategyIdResolvesWeightedLeastLoadAliases() {
+        assertEquals(RoutingStrategyId.WEIGHTED_LEAST_LOAD,
+                RoutingStrategyId.fromName("WEIGHTED_LEAST_LOAD").orElseThrow());
+        assertEquals(RoutingStrategyId.WEIGHTED_LEAST_LOAD,
+                RoutingStrategyId.fromName("weighted-least-load").orElseThrow());
+    }
+
+    @Test
+    void duplicateStrategyRegistrationRemainsRejected() {
+        assertThrows(IllegalArgumentException.class, () -> new RoutingStrategyRegistry(List.of(
+                new WeightedLeastLoadStrategy(FIXED_CLOCK),
+                new WeightedLeastLoadStrategy(FIXED_CLOCK))));
     }
 
     @Test
@@ -89,11 +110,12 @@ class RoutingComparisonEngineTest {
     @Test
     void comparisonEnginePreservesRequestedOrderDeterministically() {
         RoutingComparisonEngine engine = new RoutingComparisonEngine(
-                new RoutingStrategyRegistry(List.of(new TailLatencyPowerOfTwoStrategy(
-                        new ServerScoreCalculator(), new Random(11), FIXED_CLOCK))),
+                new RoutingStrategyRegistry(List.of(
+                        new TailLatencyPowerOfTwoStrategy(new ServerScoreCalculator(), new Random(11), FIXED_CLOCK),
+                        new WeightedLeastLoadStrategy(FIXED_CLOCK))),
                 FIXED_CLOCK);
         List<RoutingStrategyId> requested = List.of(
-                RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO,
+                RoutingStrategyId.WEIGHTED_LEAST_LOAD,
                 RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO);
 
         RoutingComparisonReport report = engine.compare(healthyCandidates(), requested);
@@ -102,6 +124,44 @@ class RoutingComparisonEngineTest {
         assertEquals(2, report.results().size());
         assertEquals(requested.get(0), report.results().get(0).strategyId());
         assertEquals(requested.get(1), report.results().get(1).strategyId());
+    }
+
+    @Test
+    void comparisonEngineCanCompareBothStrategiesTogether() {
+        RoutingComparisonEngine engine = new RoutingComparisonEngine(
+                new RoutingStrategyRegistry(List.of(
+                        new TailLatencyPowerOfTwoStrategy(new ServerScoreCalculator(), new Random(3), FIXED_CLOCK),
+                        new WeightedLeastLoadStrategy(FIXED_CLOCK))),
+                FIXED_CLOCK);
+
+        RoutingComparisonReport report = engine.compare(healthyCandidates(), List.of(
+                RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO,
+                RoutingStrategyId.WEIGHTED_LEAST_LOAD));
+
+        assertEquals(List.of(
+                RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO,
+                RoutingStrategyId.WEIGHTED_LEAST_LOAD), report.requestedStrategies());
+        assertEquals(2, report.results().size());
+        assertTrue(report.results().stream().allMatch(RoutingComparisonResult::successful));
+        assertEquals(RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO, report.results().get(0).strategyId());
+        assertEquals(RoutingStrategyId.WEIGHTED_LEAST_LOAD, report.results().get(1).strategyId());
+    }
+
+    @Test
+    void defaultComparisonOrderFollowsRegistryOrder() {
+        RoutingComparisonEngine engine = new RoutingComparisonEngine(
+                new RoutingStrategyRegistry(List.of(
+                        new TailLatencyPowerOfTwoStrategy(new ServerScoreCalculator(), new Random(3), FIXED_CLOCK),
+                        new WeightedLeastLoadStrategy(FIXED_CLOCK))),
+                FIXED_CLOCK);
+
+        RoutingComparisonReport report = engine.compare(healthyCandidates());
+
+        assertEquals(List.of(
+                RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO,
+                RoutingStrategyId.WEIGHTED_LEAST_LOAD), report.requestedStrategies());
+        assertEquals(RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO, report.results().get(0).strategyId());
+        assertEquals(RoutingStrategyId.WEIGHTED_LEAST_LOAD, report.results().get(1).strategyId());
     }
 
     @Test
