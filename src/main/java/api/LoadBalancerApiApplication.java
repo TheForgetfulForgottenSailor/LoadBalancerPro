@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
 public class LoadBalancerApiApplication {
-    private static final String FALLBACK_VERSION = "1.2.1";
+    private static final String FALLBACK_VERSION = "1.3.1";
 
     public static void main(String[] args) {
         if (isVersionRequested(args)) {

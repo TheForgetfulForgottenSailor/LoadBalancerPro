@@ -21,6 +21,6 @@ class LoadBalancerApiApplicationTest {
     void versionFallsBackWhenPackageMetadataIsUnavailable() {
         assertTrue(LoadBalancerApiApplication.isVersionRequested(new String[]{"--version"}));
         assertFalse(LoadBalancerApiApplication.isVersionRequested(new String[]{"--server.port=18080"}));
-        assertEquals("1.2.1", LoadBalancerApiApplication.version());
+        assertEquals("1.3.1", LoadBalancerApiApplication.version());
     }
 }
