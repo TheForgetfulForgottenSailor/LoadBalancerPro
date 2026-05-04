@@ -7,6 +7,10 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
+  # Required by actions/attest@v4.1.0 for artifact storage records.
+  artifact-metadata: write
 
 jobs:
   release-artifacts:
@@ -183,6 +187,19 @@ jobs:
 
           cd release-artifacts
           sha256sum -c "LoadBalancerPro-${RELEASE_VERSION}-SHA256SUMS.txt"
+
+      - name: Attest release JAR provenance
+        # actions/attest@v4.1.0
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26
+        with:
+          subject-path: release-artifacts/LoadBalancerPro-${{ env.RELEASE_VERSION }}.jar
+
+      - name: Attest release JAR SBOM
+        # actions/attest@v4.1.0
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26
+        with:
+          subject-path: release-artifacts/LoadBalancerPro-${{ env.RELEASE_VERSION }}.jar
+          sbom-path: release-artifacts/LoadBalancerPro-${{ env.RELEASE_VERSION }}-bom.json
 
       - name: Upload release artifacts
         # actions/upload-artifact@v4.6.2
