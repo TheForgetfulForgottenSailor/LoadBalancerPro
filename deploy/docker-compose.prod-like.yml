@@ -1,0 +1,13 @@
+services:
+  loadbalancerpro:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: loadbalancerpro:prod-like
+    ports:
+      - "127.0.0.1:18080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      LOADBALANCERPRO_API_KEY: replace-with-random-local-test-value
+      LOADBALANCERPRO_OTLP_METRICS_ENABLED: "false"
+    restart: "no"
