@@ -162,6 +162,28 @@ jobs:
 
           ls -l release-artifacts
 
+      - name: Generate SHA-256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd release-artifacts
+          sha256sum \
+            "LoadBalancerPro-${RELEASE_VERSION}.jar" \
+            "LoadBalancerPro-${RELEASE_VERSION}-bom.json" \
+            "LoadBalancerPro-${RELEASE_VERSION}-bom.xml" \
+            > "LoadBalancerPro-${RELEASE_VERSION}-SHA256SUMS.txt"
+
+          cat "LoadBalancerPro-${RELEASE_VERSION}-SHA256SUMS.txt"
+
+      - name: Verify SHA-256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd release-artifacts
+          sha256sum -c "LoadBalancerPro-${RELEASE_VERSION}-SHA256SUMS.txt"
+
       - name: Upload release artifacts
         # actions/upload-artifact@v4.6.2
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -171,4 +193,5 @@ jobs:
             release-artifacts/LoadBalancerPro-${{ env.RELEASE_VERSION }}.jar
             release-artifacts/LoadBalancerPro-${{ env.RELEASE_VERSION }}-bom.json
             release-artifacts/LoadBalancerPro-${{ env.RELEASE_VERSION }}-bom.xml
+            release-artifacts/LoadBalancerPro-${{ env.RELEASE_VERSION }}-SHA256SUMS.txt
           retention-days: 90

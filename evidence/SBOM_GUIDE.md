@@ -1,14 +1,14 @@
 # LoadBalancerPro SBOM Guide
 
-Date: 2026-05-03
-Branch: `feature/v1.7.0-release-artifacts`
+Date: 2026-05-04
+Branch: `feature/v1.8.0-release-checksums`
 Verification commands: `mvn -q test`, `mvn -q -DskipTests package`, `mvn -B org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -DoutputFormat=all -DoutputDirectory=target -DoutputName=bom -Dcyclonedx.skipAttach=true`
 
 ## Purpose and Scope
 
 This guide documents CycloneDX Software Bill of Materials (SBOM) generation for LoadBalancerPro.
 
-It covers the manually invoked local command, the branch CI-generated SBOM artifact path, and the tag-triggered release artifact SBOM path. It does not change production code, `pom.xml`, dependencies, Maven plugin configuration, Docker behavior, or runtime behavior. It does not commit generated SBOM files.
+It covers the manually invoked local command, the branch CI-generated SBOM artifact path, and the tag-triggered release artifact SBOM/checksum path. It does not change production code, `pom.xml`, dependencies, Maven plugin configuration, Docker behavior, or runtime behavior. It does not commit generated SBOM files.
 
 This guide is intended to improve repeatable dependency inventory evidence while keeping supply-chain claims conservative.
 
@@ -70,8 +70,17 @@ The release artifact bundle uses deterministic names:
 - `LoadBalancerPro-${version}.jar`
 - `LoadBalancerPro-${version}-bom.json`
 - `LoadBalancerPro-${version}-bom.xml`
+- `LoadBalancerPro-${version}-SHA256SUMS.txt`
 
 The uploaded artifact is named `loadbalancerpro-release-${version}` and is retained for 90 days. These are GitHub Actions artifacts, not GitHub Release assets. Generated JAR and SBOM files remain build outputs and are not committed to the repository.
+
+The checksum file contains SHA-256 hashes for the release JAR and both SBOM files. After downloading and extracting the artifact bundle, Linux/macOS users can verify the files with:
+
+```sh
+sha256sum -c LoadBalancerPro-${version}-SHA256SUMS.txt
+```
+
+Checksums help verify downloaded artifact integrity against the checksum file. They do not prove who built the artifact, replace signatures or attestations, or prove dependencies are vulnerability-free.
 
 The release SBOM remains component inventory. It is not vulnerability proof, a signature, an attestation, or a production-readiness claim. Artifact attestations and signing are future work.
 
@@ -154,7 +163,7 @@ Test libraries still matter to evidence quality and supply-chain review, but run
 
 Conservative next steps:
 
-- Review versioned JAR/SBOM bundles produced by the tag-triggered release artifact workflow.
+- Review versioned JAR/SBOM/checksum bundles produced by the tag-triggered release artifact workflow.
 - Add a documented dependency update cadence and accepted dependency-risk triage process.
 - Add a pinned CycloneDX plugin configuration to `pom.xml` only after manual generation proves useful.
 - Add artifact attestations after release artifact naming and publishing are stable.
