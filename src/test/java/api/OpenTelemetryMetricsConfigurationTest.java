@@ -35,7 +35,7 @@ class OpenTelemetryMetricsConfigurationTest {
 
         Map<String, String> resourceAttributes = resourceAttributes(environment);
         assertEquals("loadbalancerpro", resourceAttributes.get("service.name"));
-        assertEquals("1.7.0", resourceAttributes.get("service.version"));
+        assertEquals("1.8.0", resourceAttributes.get("service.version"));
         assertEquals("local", resourceAttributes.get("deployment.environment"));
         assertFalse(OtlpRegistryAssertions.hasOtlpRegistry(meterRegistry));
     }
