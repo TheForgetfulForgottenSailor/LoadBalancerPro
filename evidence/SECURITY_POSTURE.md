@@ -55,7 +55,9 @@ This document summarizes the current security and safety posture for the portfol
 - The workflow fails before upload if the Git tag version and Maven project version do not match.
 - Release artifacts are uploaded as GitHub Actions artifacts with deterministic names and a SHA-256 checksum file.
 - Checksums support downloaded artifact integrity checks against the uploaded checksum file, but they do not prove builder identity or replace signatures or attestations.
-- This is release evidence, not artifact signing, GitHub artifact attestation, GitHub Release asset publication, or a production-readiness claim.
+- GitHub artifact attestations provide build provenance evidence for the release JAR and the JAR/SBOM JSON relationship.
+- Attestations help consumers verify where and how the attested artifact was built, but they are not PGP signing, notarization, vulnerability scanning, or production-readiness proof.
+- This is release evidence, not GitHub Release asset publication, release signing beyond GitHub artifact attestations, container signing, or a production-readiness claim.
 
 ## What Is Verified By Tests
 
