@@ -90,7 +90,7 @@ The repository also includes `.trivyignore`, documented as empty-by-default. All
 
 ## Release Artifact Provenance Checks
 
-The tag-triggered Release Artifacts workflow is separate from CI and CodeQL. It runs only on semantic version tags matching `v*.*.*` and does not run on normal branch pushes or pull requests.
+The tag-triggered Release Artifacts workflow is separate from CI and CodeQL. It runs only on semantic version tags matching `v*.*.*` and does not run on normal branch pushes or pull requests. Semantic release tags matching `v*.*.*` require Maven/app metadata alignment before push because the workflow intentionally fails on tag/Maven version mismatches.
 
 Current release artifact workflow behavior includes:
 
