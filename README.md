@@ -56,6 +56,7 @@ The release evidence set lives in [`evidence/`](evidence/):
 - [`SUPPLY_CHAIN_EVIDENCE.md`](evidence/SUPPLY_CHAIN_EVIDENCE.md) records current dependency and supply-chain evidence, gaps, and future hardening options.
 - [`SBOM_GUIDE.md`](evidence/SBOM_GUIDE.md) documents manual CycloneDX SBOM generation, CI-published SBOM artifacts, and tag-triggered release JAR/SBOM/checksum artifact bundles.
 - [`RELEASE_ARTIFACT_EVIDENCE.md`](evidence/RELEASE_ARTIFACT_EVIDENCE.md) documents release artifact bundle, SHA-256 checksum, and GitHub attestation evidence.
+- [`PERFORMANCE_BASELINE.md`](evidence/PERFORMANCE_BASELINE.md) provides a conservative local performance baseline template with no production SLO claims.
 - [`DEPLOYMENT_HARDENING_GUIDE.md`](docs/DEPLOYMENT_HARDENING_GUIDE.md) documents production-like deployment boundaries, edge controls, auth, telemetry, and cloud-safety guidance.
 - [`SECRET_MANAGEMENT_GUIDE.md`](docs/SECRET_MANAGEMENT_GUIDE.md) documents secret categories, storage guidance, leakage paths, rotation, and sanitized examples.
 - [`OPERATIONS_GUIDE.md`](docs/OPERATIONS_GUIDE.md) documents startup checks, health verification, monitoring, incident response, rollback, and release evidence review guidance.
