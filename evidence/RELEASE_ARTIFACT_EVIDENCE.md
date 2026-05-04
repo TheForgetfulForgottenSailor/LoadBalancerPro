@@ -38,6 +38,21 @@ The release workflow chain for `v1.9.0` included:
 - release JAR provenance attestation,
 - JAR/SBOM JSON relationship attestation.
 
+## Known Historical Workflow Failure: v1.9.1
+
+`v1.9.1` was a docs/evidence-only patch release.
+
+The `Release Artifacts` workflow failed before artifact upload at the `Verify Maven version matches tag` step:
+
+```text
+Tag version: 1.9.1
+Maven version: 1.9.0
+```
+
+This failure was expected for the repository history because Maven/app metadata was not aligned to `1.9.1` before the docs-only tag was created. The version-alignment guard worked as intended and prevented misleading release artifacts from being published for a tag whose version did not match the Maven project version.
+
+`v2.0.0` passed the `Release Artifacts` workflow and is the current release artifact baseline. Do not move, rewrite, or rerun the `v1.9.1` tag to change historical behavior.
+
 ## Checksum Role
 
 `LoadBalancerPro-1.9.0-SHA256SUMS.txt` records SHA-256 hashes for the release JAR and SBOM files.
