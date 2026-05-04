@@ -54,7 +54,7 @@ The release evidence set lives in [`evidence/`](evidence/):
 - [`RESIDUAL_RISKS.md`](evidence/RESIDUAL_RISKS.md) tracks ranked residual risks with owners, status, evidence, and next actions.
 - [`RESILIENCE_SCORE.md`](evidence/RESILIENCE_SCORE.md) provides a conservative evidence-backed resilience scorecard.
 - [`SUPPLY_CHAIN_EVIDENCE.md`](evidence/SUPPLY_CHAIN_EVIDENCE.md) records current dependency and supply-chain evidence, gaps, and future hardening options.
-- [`SBOM_GUIDE.md`](evidence/SBOM_GUIDE.md) documents manual CycloneDX SBOM generation, CI-published SBOM artifacts, and tag-triggered release JAR/SBOM artifact bundles.
+- [`SBOM_GUIDE.md`](evidence/SBOM_GUIDE.md) documents manual CycloneDX SBOM generation, CI-published SBOM artifacts, and tag-triggered release JAR/SBOM/checksum artifact bundles.
 
 ## Hardened Foundation Checklist
 
@@ -407,7 +407,7 @@ The LASE demo smoke checks run deterministic synthetic reports, verify safe fail
 
 GitHub Actions are pinned to reviewed commit SHAs, with comments preserving the upstream action names and version tags for update review. Docker base images are pinned by digest in the Dockerfile; update the tag and digest together in a focused PR after rebuilding, running the test/package/JAR/Docker smokes, and reviewing the Trivy result.
 
-Semantic version tags also trigger a separate Release Artifacts workflow that verifies Git tag and Maven version alignment, then uploads deterministic JAR/SBOM GitHub Actions artifacts.
+Semantic version tags also trigger a separate Release Artifacts workflow that verifies Git tag and Maven version alignment, then uploads deterministic JAR/SBOM/checksum GitHub Actions artifacts.
 
 The Trivy allowlist file is `.trivyignore`. Keep it empty unless a finding has been reviewed and accepted temporarily. Any allowlist entry should be added in a focused PR with the vulnerability ID, affected package or image layer, owner, reason for temporary acceptance, and an expiry or follow-up issue. Do not use the allowlist to hide broad dependency drift.
 

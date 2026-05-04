@@ -53,7 +53,8 @@ This document summarizes the current security and safety posture for the portfol
 
 - A separate tag-triggered Release Artifacts workflow builds the executable JAR and CycloneDX SBOM JSON/XML for semantic version tags.
 - The workflow fails before upload if the Git tag version and Maven project version do not match.
-- Release artifacts are uploaded as GitHub Actions artifacts with deterministic names.
+- Release artifacts are uploaded as GitHub Actions artifacts with deterministic names and a SHA-256 checksum file.
+- Checksums support downloaded artifact integrity checks against the uploaded checksum file, but they do not prove builder identity or replace signatures or attestations.
 - This is release evidence, not artifact signing, GitHub artifact attestation, GitHub Release asset publication, or a production-readiness claim.
 
 ## What Is Verified By Tests
