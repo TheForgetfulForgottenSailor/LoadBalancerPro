@@ -13,7 +13,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <spring-boot.version>3.5.14</spring-boot.version>
-        <aws-sdk-v2.version>2.42.35</aws-sdk-v2.version>
+        <aws-sdk-v2.version>2.44.1</aws-sdk-v2.version>
         <javafx.version>17.0.10</javafx.version>
     </properties>
 
