@@ -1,10 +1,10 @@
 * @richmond423
 
-/src/main/java/core/CloudManager.java @richmond423
-/src/main/java/api/ @richmond423
-/src/main/java/core/RoutingStrategy*.java @richmond423
-/src/main/java/core/*Routing*.java @richmond423
-/src/main/java/core/*Strategy.java @richmond423
+/src/main/java/com/richmond423/loadbalancerpro/core/CloudManager.java @richmond423
+/src/main/java/com/richmond423/loadbalancerpro/api/ @richmond423
+/src/main/java/com/richmond423/loadbalancerpro/core/RoutingStrategy*.java @richmond423
+/src/main/java/com/richmond423/loadbalancerpro/core/*Routing*.java @richmond423
+/src/main/java/com/richmond423/loadbalancerpro/core/*Strategy.java @richmond423
 /Dockerfile @richmond423
 /.github/workflows/ @richmond423
 /pom.xml @richmond423
