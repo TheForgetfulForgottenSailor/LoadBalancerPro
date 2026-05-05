@@ -427,14 +427,6 @@ public class LoadBalancer {
     }
 
     public void updateCloudMetricsIfAvailable() throws IOException {
-        updateMetricsFromCloud();
-    }
-
-    /**
-     * Legacy name kept for CLI/monitor callers.
-     */
-    @Deprecated
-    public void updateMetricsFromCloud() throws IOException {
         if (cloudManager == null) {
             logger.debug("CloudManager not initialized; skipping cloud metric update.");
             return;
@@ -458,6 +450,14 @@ public class LoadBalancer {
                 }
             }
         }
+    }
+
+    /**
+     * Legacy name kept for compatibility. Prefer updateCloudMetricsIfAvailable().
+     */
+    @Deprecated
+    public void updateMetricsFromCloud() throws IOException {
+        updateCloudMetricsIfAvailable();
     }
 
     public void scaleCloudServers(int desiredCapacity) {
