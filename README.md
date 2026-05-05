@@ -6,6 +6,35 @@ It is built as a polished portfolio and enterprise-demo system: the code demonst
 
 The API and CLI are safe by default: allocation endpoints do not call AWS, CLI cloud integration is disabled unless requested, Docker/local runs do not require AWS credentials, and cloud mutation stays disabled unless every live-mode guardrail is configured explicitly.
 
+## What This Project Demonstrates
+
+- Java 17 and Spring Boot API design with validation, structured errors, health/metrics endpoints, OpenAPI docs, and conservative profile defaults.
+- A guarded cloud boundary where AWS mutation is isolated in `com.richmond423.loadbalancerpro.core.CloudManager`, disabled by default, and covered through mocked tests.
+- Package, release, and supply-chain discipline: semantic version tags, Maven/JAR alignment checks, CycloneDX SBOMs, SHA-256 checksums, GitHub attestations, and release evidence notes.
+- Docker runtime hardening with a non-root user, container healthcheck, loopback-bound local smoke tests, and post-v2.4.0 runtime verification.
+- Portfolio-grade engineering hygiene: focused dependency maintenance, documented residual risks, explicit safety boundaries, and evidence-backed claims.
+
+## What This Project Is Not
+
+- It is not production-certified infrastructure, a managed cloud load balancer, or a replacement for provider-native load-balancing services.
+- It does not mutate live AWS resources unless live mode, operator intent, account/region/capacity guardrails, and dry-run opt-out are all configured explicitly.
+- It does not claim production SLOs, unmanaged internet exposure readiness, complete identity/authorization, or production-grade secret rotation.
+- LASE routing and shadow-advisor features are demo/research-grade foundations unless a section explicitly says a behavior is wired into public allocation flows.
+
+## Current Release Evidence
+
+- [GitHub Release v2.4.0](https://github.com/richmond423/LoadBalancerPro/releases/tag/v2.4.0) is published with the JAR, SBOM JSON, SBOM XML, and SHA-256 checksum assets attached.
+- [`docs/V2_4_0_RELEASE_ARTIFACT_EVIDENCE.md`](docs/V2_4_0_RELEASE_ARTIFACT_EVIDENCE.md) records the release artifact, checksum, SBOM, and attestation evidence.
+- [`docs/V2_4_0_DOCKER_RUNTIME_EVIDENCE.md`](docs/V2_4_0_DOCKER_RUNTIME_EVIDENCE.md) records Docker build/runtime verification after the namespace migration.
+- [`docs/V2_4_0_NAMESPACE_MIGRATION_RELEASE.md`](docs/V2_4_0_NAMESPACE_MIGRATION_RELEASE.md) summarizes the package namespace migration and downstream compatibility note.
+
+## Release Timeline
+
+- `v2.4.0`: package namespace migration to `com.richmond423.loadbalancerpro.*` and Maven `groupId` `com.richmond423`.
+- `v2.3.5`: GitHub Actions workflow maintenance for Node.js 24 action versions.
+- `v2.3.4`: Caffeine dependency maintenance, `3.1.8` to `3.2.4`.
+- `v2.3.3`: Gson dependency maintenance, `2.10.1` to `2.14.0`.
+
 ## Architecture Overview
 
 - Core load-balancing engine: `com.richmond423.loadbalancerpro.core.LoadBalancer`, `com.richmond423.loadbalancerpro.core.Server`, and related strategy/result types model server health, capacity, weighted distribution, predictive allocation, and failure handling.
