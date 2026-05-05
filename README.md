@@ -37,6 +37,44 @@ The API and CLI are safe by default: allocation endpoints do not call AWS, CLI c
 
 ## Architecture Overview
 
+The diagram shows the project boundaries: user entry points, core routing logic, shadow-only LASE analysis, guarded cloud integration, runtime health checks, and release evidence.
+
+```mermaid
+flowchart TD
+    reviewer["User / Reviewer"]
+    cli["CLI workflows"]
+    api["REST API / Actuator"]
+    core["LoadBalancer core"]
+    routing["Routing strategy evaluation"]
+    lase["LASE shadow advisor"]
+    obs["Observability / evidence outputs"]
+    cloud["Guarded CloudManager boundary"]
+    dryrun["Dry-run by default"]
+    aws["AWS resources"]
+    docker["Docker runtime healthcheck"]
+    ci["CI / Release Artifacts"]
+    jar["Executable JAR"]
+    sbom["CycloneDX SBOM"]
+    sums["SHA-256 checksums"]
+    attest["GitHub attestations"]
+
+    reviewer --> cli
+    reviewer --> api
+    cli --> core
+    api --> core
+    core --> routing
+    core --> lase
+    core --> obs
+    core --> cloud
+    cloud --> dryrun
+    dryrun -. "Live AWS only with explicit guardrails" .-> aws
+    docker --> api
+    ci --> jar
+    ci --> sbom
+    ci --> sums
+    ci --> attest
+```
+
 - Core load-balancing engine: `com.richmond423.loadbalancerpro.core.LoadBalancer`, `com.richmond423.loadbalancerpro.core.Server`, and related strategy/result types model server health, capacity, weighted distribution, predictive allocation, and failure handling.
 - LASE telemetry/scoring/routing foundation: `com.richmond423.loadbalancerpro.core.ServerStateVector`, `com.richmond423.loadbalancerpro.core.ServerScoreCalculator`, `com.richmond423.loadbalancerpro.core.RoutingDecision`, and `com.richmond423.loadbalancerpro.core.TailLatencyPowerOfTwoStrategy` provide an internal foundation for tail-latency-aware, queue-aware, explainable routing decisions. This foundation is intentionally not wired into the public allocation flows yet.
 - ServerMonitor / health monitoring: `com.richmond423.loadbalancerpro.core.ServerMonitor` tracks local and mocked cloud health paths, emits health events, and coordinates with load balancer state without requiring real cloud resources in the default test suite.
