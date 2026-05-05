@@ -8,13 +8,13 @@ The API and CLI are safe by default: allocation endpoints do not call AWS, CLI c
 
 ## Architecture Overview
 
-- Core load-balancing engine: `core.LoadBalancer`, `core.Server`, and related strategy/result types model server health, capacity, weighted distribution, predictive allocation, and failure handling.
-- LASE telemetry/scoring/routing foundation: `core.ServerStateVector`, `core.ServerScoreCalculator`, `core.RoutingDecision`, and `core.TailLatencyPowerOfTwoStrategy` provide an internal foundation for tail-latency-aware, queue-aware, explainable routing decisions. This foundation is intentionally not wired into the public allocation flows yet.
-- ServerMonitor / health monitoring: `core.ServerMonitor` tracks local and mocked cloud health paths, emits health events, and coordinates with load balancer state without requiring real cloud resources in the default test suite.
+- Core load-balancing engine: `com.richmond423.loadbalancerpro.core.LoadBalancer`, `com.richmond423.loadbalancerpro.core.Server`, and related strategy/result types model server health, capacity, weighted distribution, predictive allocation, and failure handling.
+- LASE telemetry/scoring/routing foundation: `com.richmond423.loadbalancerpro.core.ServerStateVector`, `com.richmond423.loadbalancerpro.core.ServerScoreCalculator`, `com.richmond423.loadbalancerpro.core.RoutingDecision`, and `com.richmond423.loadbalancerpro.core.TailLatencyPowerOfTwoStrategy` provide an internal foundation for tail-latency-aware, queue-aware, explainable routing decisions. This foundation is intentionally not wired into the public allocation flows yet.
+- ServerMonitor / health monitoring: `com.richmond423.loadbalancerpro.core.ServerMonitor` tracks local and mocked cloud health paths, emits health events, and coordinates with load balancer state without requiring real cloud resources in the default test suite.
 - API layer: the Spring Boot API exposes calculation-only allocation endpoints, request validation, browser CORS behavior, security headers, request-size limits, structured error envelopes, Swagger/OpenAPI docs, and Actuator health/metrics endpoints.
-- CLI workflow: `cli.LoadBalancerCLI` provides interactive local workflows and optional cloud integration while retaining ownership of monitor lifecycle cleanup.
+- CLI workflow: `com.richmond423.loadbalancerpro.cli.LoadBalancerCLI` provides interactive local workflows and optional cloud integration while retaining ownership of monitor lifecycle cleanup.
 - CSV/JSON import/export utilities: parser and utility code validate schema, reject malformed input, neutralize CSV injection risk, and keep import/export contracts aligned.
-- CloudManager / AWS safety boundary: `core.CloudManager` is the only AWS mutation boundary. Live ASG creation, scaling, registration, and deletion paths are guarded, dry-run by default, and covered with mocked AWS clients.
+- CloudManager / AWS safety boundary: `com.richmond423.loadbalancerpro.core.CloudManager` is the only AWS mutation boundary. Live ASG creation, scaling, registration, and deletion paths are guarded, dry-run by default, and covered with mocked AWS clients.
 - Docker/CI/release gates: GitHub Actions runs dependency resolution, tests, packaging, packaged-JAR smoke checks, and Docker image builds. The Docker runtime uses a non-root user and a container healthcheck.
 
 ## Roadmap: LoadBalancer Adaptive Systems Engine
@@ -644,7 +644,7 @@ The `prod` and `cloud-sandbox` profiles expose only `/actuator/health` and `/act
 Run the interactive CLI:
 
 ```bash
-mvn -q exec:java "-Dexec.mainClass=cli.LoadBalancerCLI"
+mvn -q exec:java "-Dexec.mainClass=com.richmond423.loadbalancerpro.cli.LoadBalancerCLI"
 ```
 
 For a local allocation demo, run the interactive CLI and choose the balance-load workflow. The CLI does not currently expose a `--allocator-demo` flag.
@@ -652,7 +652,7 @@ For a local allocation demo, run the interactive CLI and choose the balance-load
 Enable cloud integration for the CLI only when explicitly needed:
 
 ```bash
-mvn -q exec:java "-Dexec.mainClass=cli.LoadBalancerCLI" "-Dexec.args=--cloud-enabled"
+mvn -q exec:java "-Dexec.mainClass=com.richmond423.loadbalancerpro.cli.LoadBalancerCLI" "-Dexec.args=--cloud-enabled"
 ```
 
 CLI general settings may be supplied in `cli.config` or with `--config <file>`. Cloud credentials and guardrails are loaded from system properties or environment variables.

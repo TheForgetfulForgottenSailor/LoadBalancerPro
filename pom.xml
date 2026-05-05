@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://www.w3.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.example</groupId>
+    <groupId>com.richmond423</groupId>
     <artifactId>LoadBalancerPro</artifactId>
     <version>2.3.5</version>
 
@@ -197,7 +197,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring-boot.version}</version>
                 <configuration>
-                    <mainClass>api.LoadBalancerApiApplication</mainClass>
+                    <mainClass>com.richmond423.loadbalancerpro.api.LoadBalancerApiApplication</mainClass>
                 </configuration>
                 <executions>
                     <execution>
