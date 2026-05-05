@@ -1,12 +1,13 @@
-# Remaining Dependabot Posture After v2.3.5
+# Remaining Dependabot Posture After v2.4.0
 
 ## Current Checkpoint
 
-- `v2.3.5` is closed.
+- `v2.4.0` is closed and released.
 - Safe GitHub Actions workflow maintenance is complete.
 - The `actions/upload-artifact@v7` release artifact upload path is proven.
+- Package namespace migration to `com.richmond423.loadbalancerpro.*` is complete.
+- Maven `groupId` is now `com.richmond423`.
 - `public/main` was untouched.
-- Namespace migration has not started.
 
 ## Completed Safe PRs
 
@@ -32,10 +33,10 @@
 - No remaining PR is safe to merge as routine maintenance.
 - Treat each remaining PR as its own compatibility project.
 - Consider Dependabot grouping/noise-reduction later.
-- Keep the `v2.4.0` namespace migration separate from dependency upgrades.
+- Keep future deferred dependency upgrades separate from namespace-migration follow-up or deprecated-shim cleanup.
 
 ## Safety Notes
 
 - This note is documentation-only and intends no behavior changes.
 - No `public/main` work is included.
-- No namespace migration implementation is included.
+- No namespace migration implementation is included in this note; the migration itself was completed separately in `v2.4.0`.

@@ -8,12 +8,13 @@ Reduce risky Dependabot noise while preserving security updates and low-risk mai
 
 The current Dependabot configuration checks Maven, GitHub Actions, and Docker weekly with an open pull request limit of five for each ecosystem. It does not group or defer update classes, so major Java, Docker/base image, Spring, and JavaFX PRs can appear alongside low-risk patch or minor updates.
 
-## Lessons From v2.3.3-v2.3.5
+## Lessons From v2.3.3-v2.4.0
 
 - One PR at a time worked well.
 - Release evidence and post-release artifact verification worked well.
 - GitHub Actions updates should be handled separately from application dependencies.
 - `actions/upload-artifact` changes require tag-triggered Release Artifacts verification because they affect the release upload path.
+- The `v2.4.0` namespace migration was safest as a dedicated compatibility release, separate from dependency upgrades.
 
 ## Proposed Grouping Strategy
 
@@ -52,5 +53,5 @@ Do not edit `.github/dependabot.yml` until this plan is reviewed and approved.
 ## Safety Notes
 
 - This is a planning document only and makes no behavior changes.
-- Namespace migration is not started.
+- Namespace migration is complete as of `v2.4.0`; this plan does not propose further namespace work.
 - `public/main` remains untouched.
