@@ -384,9 +384,10 @@ class ServerMonitorTest {
         int cloudServerCount = 1000;
         ExecutorService executor = Executors.newFixedThreadPool(4);
 
-        if (balancer.getCloudManager() != null) {
+        var cloudManager = balancer.getCloudManagerOptional();
+        if (cloudManager.isPresent()) {
             waitForMonitorCycles(6, 35);
-            assertEquals(balancer.getServers().size(), balancer.getCloudManager().getMinServers(),
+            assertEquals(balancer.getServers().size(), cloudManager.get().getMinServers(),
                         "Cloud server count should match initialized minimum.");
         } else {
             for (int i = 1; i <= cloudServerCount; i++) {
