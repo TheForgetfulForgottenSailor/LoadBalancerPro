@@ -15,6 +15,7 @@ import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiFunction;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -196,6 +197,39 @@ class LoadBalancerTest {
         assertTrue(afterReplacement.containsKey("S1"), "Replacement S1 should participate in hash ring!");
         assertTrue(afterReplacement.keySet().stream().allMatch(id -> id.equals("S1") || id.equals("S2")),
             "Hashing should only route to current registry servers!");
+    }
+
+    @Test
+    void testRemoveServerUpdatesPublicSnapshotsAndRoutingState() {
+        logger.info("=== TESTING SERVER REMOVAL PUBLIC SNAPSHOTS ===");
+        Server removed = new Server("REMOVE", 10.0, 20.0, 30.0);
+        Server remaining = new Server("KEEP", 20.0, 30.0, 40.0, ServerType.CLOUD);
+        addServers(removed, remaining);
+        balancer.roundRobin(100.0);
+
+        balancer.removeServer("REMOVE");
+
+        assertNull(balancer.getServer("REMOVE"), "Removed server should not be returned by ID!");
+        assertSame(remaining, balancer.getServer("KEEP"), "Remaining server should still be returned by ID!");
+        assertFalse(balancer.getServerMap().containsKey("REMOVE"), "Server map snapshot should omit removed server!");
+        assertEquals(1, balancer.getServerMap().size(), "Server map snapshot should have one entry!");
+        assertEquals(List.of(remaining), balancer.getServers(), "Server snapshot should only contain remaining server!");
+        assertEquals(List.of(remaining), balancer.getServersByType(ServerType.CLOUD),
+            "Typed snapshot should retain remaining cloud server!");
+        assertTrue(balancer.getServersByType(ServerType.ONSITE).isEmpty(),
+            "Typed snapshot should omit removed onsite server!");
+
+        Map<String, Double> rebalanced = balancer.rebalanceExistingLoad();
+        assertEquals(1, rebalanced.size(), "Only remaining current load should be rebalanced!");
+        assertEquals(50.0, rebalanced.get("KEEP"), 0.01,
+            "Removing a server should remove its accumulated public distribution state!");
+
+        Map<String, Double> hashed = balancer.consistentHashing(100.0, 10);
+        assertEquals(Set.of("KEEP"), hashed.keySet(), "Hash ring should route only to remaining server!");
+
+        assertDoesNotThrow(() -> balancer.removeServer("MISSING"), "Removing a missing server should be a no-op!");
+        assertDoesNotThrow(() -> balancer.removeServer(null), "Removing a null server ID should be a no-op!");
+        assertEquals(List.of(remaining), balancer.getServers(), "Removal no-ops should not change server snapshot!");
     }
 
     @Test
@@ -520,6 +554,30 @@ class LoadBalancerTest {
     }
 
     @Test
+    void testEmptyBalancerResultContractsAcrossStrategies() {
+        logger.info("=== TESTING EMPTY BALANCER RESULT CONTRACTS ===");
+
+        assertTrue(balancer.roundRobin(100.0).isEmpty(), "Round robin should return empty map with no servers!");
+        assertTrue(balancer.leastLoaded(100.0).isEmpty(), "Least loaded should return empty map with no servers!");
+        assertTrue(balancer.weightedDistribution(100.0).isEmpty(),
+            "Weighted distribution should return empty map with no servers!");
+        assertTrue(balancer.consistentHashing(100.0, 10).isEmpty(),
+            "Consistent hashing should return empty map with no servers!");
+
+        LoadDistributionResult capacityAware = balancer.capacityAwareWithResult(100.0);
+        assertTrue(capacityAware.allocations().isEmpty(),
+            "Capacity-aware result should have empty allocations with no servers!");
+        assertEquals(100.0, capacityAware.unallocatedLoad(), 0.01,
+            "Capacity-aware result should report all load unallocated with no servers!");
+
+        LoadDistributionResult predictive = balancer.predictiveLoadBalancingWithResult(100.0);
+        assertTrue(predictive.allocations().isEmpty(),
+            "Predictive result should have empty allocations with no servers!");
+        assertEquals(100.0, predictive.unallocatedLoad(), 0.01,
+            "Predictive result should report all load unallocated with no servers!");
+    }
+
+    @Test
     void testPredictiveDistributionSkipsExhaustedPredictedCapacityAndCapsOverflow() {
         logger.info("=== TESTING PREDICTIVE DISTRIBUTION EXHAUSTED CAPACITY ===");
         LoadBalancer aggressive = new LoadBalancer(100.0, 10, 2.0);
@@ -710,6 +768,35 @@ class LoadBalancerTest {
         assertEquals(100.0, roundRobinRebalance.get("HIGH"), 0.01, "Round-robin rebalance should split evenly!");
     }
 
+    @Test
+    @SuppressWarnings("deprecation")
+    void testBalanceLoadCompatibilityShimMatchesExplicitRebalance() {
+        logger.info("=== TESTING BALANCE LOAD COMPATIBILITY SHIM ===");
+        LoadBalancer explicit = new LoadBalancer();
+        try {
+            addServers(
+                new Server("S1", 10.0, 10.0, 10.0),
+                new Server("S2", 20.0, 20.0, 20.0)
+            );
+            explicit.addServer(new Server("S1", 10.0, 10.0, 10.0));
+            explicit.addServer(new Server("S2", 20.0, 20.0, 20.0));
+
+            balancer.roundRobin(80.0);
+            explicit.roundRobin(80.0);
+            balancer.setStrategy(LoadBalancer.Strategy.LEAST_LOADED);
+            explicit.setStrategy(LoadBalancer.Strategy.LEAST_LOADED);
+
+            Map<String, Double> viaShim = balancer.balanceLoad();
+            Map<String, Double> explicitRebalance = explicit.rebalanceExistingLoad();
+
+            assertEquals(explicitRebalance, viaShim, "balanceLoad should match explicit rebalance behavior!");
+            assertEquals(40.0, viaShim.get("S1"), 0.01, "Shim rebalance should preserve current S1 allocation!");
+            assertEquals(40.0, viaShim.get("S2"), 0.01, "Shim rebalance should preserve current S2 allocation!");
+        } finally {
+            explicit.shutdown();
+        }
+    }
+
     /**
      * Tests load balancing strategies with an even split across two servers.
      *
@@ -767,6 +854,27 @@ class LoadBalancerTest {
         assertFalse(server.isHealthy(), "Server should be marked unhealthy after 100% CPU!");
         assertEquals(0, balancer.getServers().size(), "Failed server should be removed after failover!");
         logger.info("Health check with failover test passed: Server removed correctly.");
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    void testDeprecatedCompatibilityShimsRemainCallableWithoutCloud() {
+        logger.info("=== TESTING DEPRECATED COMPATIBILITY SHIMS ===");
+
+        assertNull(balancer.getCloudManager(), "Legacy cloud accessor should return null before initialization!");
+        assertTrue(balancer.getCloudManagerOptional().isEmpty(),
+            "Optional cloud accessor should be empty before initialization!");
+        assertFalse(balancer.hasCloudManager(), "Cloud manager flag should be false before initialization!");
+        assertNotNull(balancer.getServerMonitor(), "Legacy server monitor accessor should remain callable!");
+        assertDoesNotThrow(() -> balancer.updateMetricsFromCloud(),
+            "Legacy cloud metrics shim should be a no-op without cloud initialization!");
+
+        Server unhealthy = new Server("FAILOVER", 100.0, 10.0, 10.0);
+        addServers(unhealthy);
+
+        assertDoesNotThrow(balancer::handleFailover, "Legacy failover shim should remain callable!");
+        assertTrue(balancer.getServers().isEmpty(), "Failover shim should preserve current health-check behavior!");
+        assertNull(balancer.getServer("FAILOVER"), "Failover shim should remove failed server from ID lookup!");
     }
 
     /**
