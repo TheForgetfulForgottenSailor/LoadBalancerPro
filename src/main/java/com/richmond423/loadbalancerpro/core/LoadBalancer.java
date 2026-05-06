@@ -25,11 +25,10 @@ public class LoadBalancer {
     private final Map<String, Server> serverMap = new ConcurrentHashMap<>();
     private final PriorityQueue<Server> loadQueue = new PriorityQueue<>(Comparator.comparingDouble(Server::getLoadScore));
     private final Map<String, Double> currentDistribution = new ConcurrentHashMap<>();
-    private final ConcurrentNavigableMap<Long, Server> consistentHashRing = new ConcurrentSkipListMap<>();
+    private final ConsistentHashRing consistentHashRing;
     private final ServerMonitor monitor;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final ReentrantReadWriteLock serverLock = new ReentrantReadWriteLock();
-    private final int hashReplicas;
     private final double predictiveLoadFactor;
     private final double maxUsageThreshold;
     private CloudManager cloudManager;
@@ -61,7 +60,7 @@ public class LoadBalancer {
                          double predictiveLoadFactor,
                          LaseShadowAdvisor laseShadowAdvisor) {
         this.maxUsageThreshold = Math.max(0, maxUsageThreshold);
-        this.hashReplicas = Math.max(1, hashReplicas);
+        this.consistentHashRing = new ConsistentHashRing(hashReplicas, logger);
         this.predictiveLoadFactor = Math.max(1.0, predictiveLoadFactor);
         this.monitor = new ServerMonitor(this, this.maxUsageThreshold, 1000, 10.0, null);
         this.laseShadowAdvisor = Objects.requireNonNull(laseShadowAdvisor, "laseShadowAdvisor cannot be null");
@@ -132,7 +131,7 @@ public class LoadBalancer {
             servers.add(server);
             serverMap.put(server.getServerId(), server);
             loadQueue.offer(server);
-            precomputeHashRingEntries(server);
+            consistentHashRing.addServer(server);
             logger.debug("Added server {} ({})", server.getServerId(), server.getServerType());
         } finally {
             serverLock.writeLock().unlock();
@@ -179,25 +178,8 @@ public class LoadBalancer {
         servers.remove(failed);
         serverMap.remove(failed.getServerId());
         loadQueue.remove(failed);
-        removeServerFromHashRing(failed);
+        consistentHashRing.removeServer(failed);
         return removedData;
-    }
-
-    private void precomputeHashRingEntries(Server server) {
-        for (int i = 0; i < hashReplicas; i++) {
-            long hash = Utils.hash(server.getServerId() + "-" + i);
-            if (hash == Long.MIN_VALUE) {
-                logger.warn("Invalid hash for server {} replica {}; using fallback.", server.getServerId(), i);
-                hash = i;
-            }
-            consistentHashRing.put(hash, server);
-        }
-    }
-
-    private void removeServerFromHashRing(Server failed) {
-        for (int i = 0; i < hashReplicas; i++) {
-            consistentHashRing.remove(Utils.hash(failed.getServerId() + "-" + i));
-        }
     }
 
     private void redistributeLoad(double redistributedData) {
@@ -275,18 +257,8 @@ public class LoadBalancer {
             return dist;
         }
         for (int i = 0; i < numKeys; i++) {
-            long keyHash = Utils.hash("data-" + i);
-            Map.Entry<Long, Server> entry = consistentHashRing.ceilingEntry(keyHash);
-            if (entry == null) entry = consistentHashRing.firstEntry();
-            Server server = entry.getValue();
-            int attempts = 0;
-            while (!server.isHealthy() && attempts < consistentHashRing.size()) {
-                entry = consistentHashRing.higherEntry(entry.getKey());
-                if (entry == null) entry = consistentHashRing.firstEntry();
-                server = entry.getValue();
-                attempts++;
-            }
-            if (server.isHealthy()) {
+            Server server = consistentHashRing.selectHealthyServer("data-" + i);
+            if (server != null) {
                 dist.merge(server.getServerId(), dataPerKey, Double::sum);
                 currentDistribution.merge(server.getServerId(), dataPerKey, Double::sum);
             } else {
