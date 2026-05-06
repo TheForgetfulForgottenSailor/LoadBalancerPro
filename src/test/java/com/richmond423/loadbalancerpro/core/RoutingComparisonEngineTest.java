@@ -7,6 +7,7 @@ import com.richmond423.loadbalancerpro.core.RoutingDecision;
 import com.richmond423.loadbalancerpro.core.RoutingStrategy;
 import com.richmond423.loadbalancerpro.core.RoutingStrategyId;
 import com.richmond423.loadbalancerpro.core.RoutingStrategyRegistry;
+import com.richmond423.loadbalancerpro.core.RoundRobinRoutingStrategy;
 import com.richmond423.loadbalancerpro.core.ServerScoreCalculator;
 import com.richmond423.loadbalancerpro.core.ServerStateVector;
 import com.richmond423.loadbalancerpro.core.TailLatencyPowerOfTwoStrategy;
@@ -44,18 +45,22 @@ class RoutingComparisonEngineTest {
     }
 
     @Test
-    void defaultRegistryReturnsTailLatencyPowerOfTwoAndWeightedLeastLoadStrategies() {
+    void defaultRegistryReturnsTailLatencyPowerOfTwoWeightedLeastLoadAndRoundRobinStrategies() {
         RoutingStrategyRegistry registry = RoutingStrategyRegistry.defaultRegistry();
 
         assertEquals(List.of(
                 RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO,
-                RoutingStrategyId.WEIGHTED_LEAST_LOAD), registry.registeredIds());
+                RoutingStrategyId.WEIGHTED_LEAST_LOAD,
+                RoutingStrategyId.ROUND_ROBIN), registry.registeredIds());
         assertTrue(registry.find(RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO).isPresent());
         assertTrue(registry.find(RoutingStrategyId.WEIGHTED_LEAST_LOAD).isPresent());
+        assertTrue(registry.find(RoutingStrategyId.ROUND_ROBIN).isPresent());
         assertEquals(RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO,
                 registry.require(RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO).id());
         assertEquals(RoutingStrategyId.WEIGHTED_LEAST_LOAD,
                 registry.require(RoutingStrategyId.WEIGHTED_LEAST_LOAD).id());
+        assertEquals(RoutingStrategyId.ROUND_ROBIN,
+                registry.require(RoutingStrategyId.ROUND_ROBIN).id());
     }
 
     @Test
@@ -76,6 +81,10 @@ class RoutingComparisonEngineTest {
                 RoutingStrategyId.fromName("WEIGHTED_LEAST_LOAD").orElseThrow());
         assertEquals(RoutingStrategyId.WEIGHTED_LEAST_LOAD,
                 RoutingStrategyId.fromName("weighted-least-load").orElseThrow());
+        assertEquals(RoutingStrategyId.ROUND_ROBIN,
+                RoutingStrategyId.fromName("ROUND_ROBIN").orElseThrow());
+        assertEquals(RoutingStrategyId.ROUND_ROBIN,
+                RoutingStrategyId.fromName("round-robin").orElseThrow());
     }
 
     @Test
@@ -152,16 +161,19 @@ class RoutingComparisonEngineTest {
         RoutingComparisonEngine engine = new RoutingComparisonEngine(
                 new RoutingStrategyRegistry(List.of(
                         new TailLatencyPowerOfTwoStrategy(new ServerScoreCalculator(), new Random(3), FIXED_CLOCK),
-                        new WeightedLeastLoadStrategy(FIXED_CLOCK))),
+                        new WeightedLeastLoadStrategy(FIXED_CLOCK),
+                        new RoundRobinRoutingStrategy(FIXED_CLOCK))),
                 FIXED_CLOCK);
 
         RoutingComparisonReport report = engine.compare(healthyCandidates());
 
         assertEquals(List.of(
                 RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO,
-                RoutingStrategyId.WEIGHTED_LEAST_LOAD), report.requestedStrategies());
+                RoutingStrategyId.WEIGHTED_LEAST_LOAD,
+                RoutingStrategyId.ROUND_ROBIN), report.requestedStrategies());
         assertEquals(RoutingStrategyId.TAIL_LATENCY_POWER_OF_TWO, report.results().get(0).strategyId());
         assertEquals(RoutingStrategyId.WEIGHTED_LEAST_LOAD, report.results().get(1).strategyId());
+        assertEquals(RoutingStrategyId.ROUND_ROBIN, report.results().get(2).strategyId());
     }
 
     @Test

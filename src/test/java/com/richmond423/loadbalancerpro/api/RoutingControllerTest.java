@@ -112,10 +112,13 @@ class RoutingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requestedStrategies[0]", is("TAIL_LATENCY_POWER_OF_TWO")))
                 .andExpect(jsonPath("$.requestedStrategies[1]", is("WEIGHTED_LEAST_LOAD")))
+                .andExpect(jsonPath("$.requestedStrategies[2]", is("ROUND_ROBIN")))
                 .andExpect(jsonPath("$.results[0].strategyId", is("TAIL_LATENCY_POWER_OF_TWO")))
                 .andExpect(jsonPath("$.results[0].chosenServerId", is("green")))
                 .andExpect(jsonPath("$.results[1].strategyId", is("WEIGHTED_LEAST_LOAD")))
-                .andExpect(jsonPath("$.results[1].chosenServerId", is("green")));
+                .andExpect(jsonPath("$.results[1].chosenServerId", is("green")))
+                .andExpect(jsonPath("$.results[2].strategyId", is("ROUND_ROBIN")))
+                .andExpect(jsonPath("$.results[2].chosenServerId", is("green")));
     }
 
     @Test
@@ -173,6 +176,52 @@ class RoutingControllerTest {
     }
 
     @Test
+    void explicitRoundRobinRequestUsesRequestOrderWithoutCloudMutationPath() throws Exception {
+        try (MockedConstruction<CloudManager> mockedCloudManager =
+                     Mockito.mockConstruction(CloudManager.class)) {
+            mockMvc.perform(routingCompare("""
+                            {
+                              "strategies": ["ROUND_ROBIN"],
+                              "servers": [
+                                {
+                                  "serverId": "green",
+                                  "healthy": true,
+                                  "inFlightRequestCount": 20,
+                                  "averageLatencyMillis": 10.0,
+                                  "p95LatencyMillis": 20.0,
+                                  "p99LatencyMillis": 40.0,
+                                  "recentErrorRate": 0.0
+                                },
+                                {
+                                  "serverId": "blue",
+                                  "healthy": true,
+                                  "inFlightRequestCount": 5,
+                                  "averageLatencyMillis": 10.0,
+                                  "p95LatencyMillis": 20.0,
+                                  "p99LatencyMillis": 40.0,
+                                  "recentErrorRate": 0.0
+                                }
+                              ]
+                            }
+                            """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.requestedStrategies[0]", is("ROUND_ROBIN")))
+                    .andExpect(jsonPath("$.candidateCount", is(2)))
+                    .andExpect(jsonPath("$.results[0].strategyId", is("ROUND_ROBIN")))
+                    .andExpect(jsonPath("$.results[0].status", is("SUCCESS")))
+                    .andExpect(jsonPath("$.results[0].chosenServerId", is("green")))
+                    .andExpect(jsonPath("$.results[0].candidateServersConsidered[0]", is("green")))
+                    .andExpect(jsonPath("$.results[0].candidateServersConsidered[1]", is("blue")))
+                    .andExpect(jsonPath("$.results[0].scores").isEmpty())
+                    .andExpect(jsonPath("$.results[0].reason", containsString("round-robin position 1 of 2")))
+                    .andExpect(jsonPath("$.error").doesNotExist());
+
+            assertTrue(mockedCloudManager.constructed().isEmpty(),
+                    "Round-robin routing comparison must not construct CloudManager or call AWS paths.");
+        }
+    }
+
+    @Test
     void emptyServersReturnsStructuredBadRequest() throws Exception {
         mockMvc.perform(routingCompare("""
                         {
@@ -225,7 +274,7 @@ class RoutingControllerTest {
     void unknownStrategyIdReturnsStructuredBadRequest() throws Exception {
         mockMvc.perform(routingCompare("""
                         {
-                          "strategies": ["ROUND_ROBIN"],
+                          "strategies": ["NOT_A_REAL_STRATEGY"],
                           "servers": [
                             {
                               "serverId": "green",

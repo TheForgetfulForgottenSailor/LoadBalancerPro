@@ -47,6 +47,7 @@ This surface chooses or recommends one server from telemetry candidates. It is e
 
 - `TAIL_LATENCY_POWER_OF_TWO`
 - `WEIGHTED_LEAST_LOAD`
+- `ROUND_ROBIN`
 
 ## Existing Legacy/Batch Algorithms
 
@@ -69,7 +70,6 @@ This surface chooses or recommends one server from telemetry candidates. It is e
 
 ## Missing From Request-Level Strategy Registry/API
 
-- Plain round robin
 - Least connections
 - Weighted round robin
 - Weighted least connections
@@ -86,6 +86,7 @@ This surface chooses or recommends one server from telemetry candidates. It is e
 ## Existing Tests
 
 - `src/test/java/com/richmond423/loadbalancerpro/core/RoutingComparisonEngineTest.java`
+- `src/test/java/com/richmond423/loadbalancerpro/core/RoundRobinRoutingStrategyTest.java`
 - `src/test/java/com/richmond423/loadbalancerpro/core/WeightedLeastLoadStrategyTest.java`
 - `src/test/java/com/richmond423/loadbalancerpro/core/ServerTelemetryRoutingTest.java`
 - `src/test/java/com/richmond423/loadbalancerpro/api/RoutingControllerTest.java`
@@ -95,7 +96,6 @@ This surface chooses or recommends one server from telemetry candidates. It is e
 
 ## Missing Tests
 
-- Registry/API tests for round robin strategy
 - Registry/API tests for least connections strategy
 - Registry/API tests for weighted round robin strategy
 - Registry/API tests for weighted least connections strategy
@@ -113,7 +113,7 @@ This surface chooses or recommends one server from telemetry candidates. It is e
 
 1. Keep this audit as the source of truth before adding routing algorithms.
 2. Add one request-level strategy at a time.
-3. Prefer plain `RoundRobinRoutingStrategy` as first implementation if implementation begins.
+3. Use `RoundRobinRoutingStrategy` as the template for adding one request-level strategy at a time.
 4. Add tests before exposing any new strategy through the registry/API.
 5. Do not refactor `LoadBalancer.java` into the request-level strategy system yet.
 6. Plan strategy-vs-strategy replay comparison separately.
