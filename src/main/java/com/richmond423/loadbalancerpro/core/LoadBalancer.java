@@ -21,6 +21,7 @@ public class LoadBalancer {
 
     private final ServerRegistry serverRegistry = new ServerRegistry();
     private final LoadDistributionEngine loadDistributionEngine;
+    private final ServerHealthCoordinator serverHealthCoordinator;
     private final List<String> alertLog = new CopyOnWriteArrayList<>();
     private final ConsistentHashRing consistentHashRing;
     private final ServerMonitor monitor;
@@ -58,6 +59,16 @@ public class LoadBalancer {
         this.maxUsageThreshold = Math.max(0, maxUsageThreshold);
         this.consistentHashRing = new ConsistentHashRing(hashReplicas, logger);
         this.loadDistributionEngine = new LoadDistributionEngine(Math.max(1.0, predictiveLoadFactor));
+        this.serverHealthCoordinator = new ServerHealthCoordinator(
+                serverRegistry,
+                loadDistributionEngine,
+                consistentHashRing,
+                this.maxUsageThreshold,
+                logger,
+                this::getHealthyServers,
+                totalData -> leastLoaded(totalData),
+                this::getServersByType,
+                () -> cloudManager);
         this.monitor = new ServerMonitor(this, this.maxUsageThreshold, 1000, 10.0, null);
         this.laseShadowAdvisor = Objects.requireNonNull(laseShadowAdvisor, "laseShadowAdvisor cannot be null");
     }
@@ -122,7 +133,7 @@ public class LoadBalancer {
         try {
             if (serverRegistry.contains(server.getServerId())) {
                 logger.warn("Duplicate server ID {} detected; replacing existing server.", server.getServerId());
-                removeFailedServer(serverRegistry.get(server.getServerId()));
+                serverHealthCoordinator.removeFailedServer(serverRegistry.get(server.getServerId()));
             }
             serverRegistry.add(server);
             consistentHashRing.addServer(server);
@@ -135,15 +146,7 @@ public class LoadBalancer {
     public void checkServerHealth() {
         serverLock.writeLock().lock();
         try {
-            List<Server> failedServers = new ArrayList<>();
-            for (Server server : serverRegistry.snapshot()) {
-                if (server.getCpuUsage() >= maxUsageThreshold || server.getMemoryUsage() >= maxUsageThreshold || 
-                    server.getDiskUsage() >= maxUsageThreshold || !server.isHealthy()) {
-                    server.setHealthy(false);
-                    failedServers.add(server);
-                    logger.warn("Server {} ({}) marked unhealthy.", server.getServerId(), server.getServerType());
-                }
-            }
+            List<Server> failedServers = serverHealthCoordinator.detectFailedServers();
             if (!failedServers.isEmpty()) removeFailedServersAndRecover(failedServers);
         } finally {
             serverLock.writeLock().unlock();
@@ -153,47 +156,9 @@ public class LoadBalancer {
     private void removeFailedServersAndRecover(List<Server> failedServers) {
         serverLock.writeLock().lock();
         try {
-            double redistributedData = 0;
-            List<Server> failedCloudServers = new ArrayList<>();
-            for (Server failed : failedServers) {
-                redistributedData += removeFailedServer(failed);
-                if (failed.getServerType() == ServerType.CLOUD) failedCloudServers.add(failed);
-            }
-            redistributeLoad(redistributedData);
-            replaceFailedCloudCapacity(failedCloudServers);
+            serverHealthCoordinator.removeFailedServersAndRecover(failedServers);
         } finally {
             serverLock.writeLock().unlock();
-        }
-    }
-
-    private double removeFailedServer(Server failed) {
-        double removedData = loadDistributionEngine.removeServerAllocation(failed.getServerId());
-        serverRegistry.remove(failed);
-        consistentHashRing.removeServer(failed);
-        return removedData;
-    }
-
-    private void redistributeLoad(double redistributedData) {
-        if (redistributedData > 0) {
-            List<Server> healthy = getHealthyServers();
-            if (healthy.isEmpty()) {
-                logger.error("No healthy servers available to redistribute {}GB.", redistributedData);
-                return;
-            }
-            Map<String, Double> newDist = leastLoaded(redistributedData);
-            loadDistributionEngine.putAllAllocations(newDist);
-            logger.info("Redistributed {}GB: {}", redistributedData, newDist);
-        }
-    }
-
-    private void replaceFailedCloudCapacity(List<Server> failedCloudServers) {
-        if (cloudManager != null && !failedCloudServers.isEmpty()) {
-            int minServers = cloudManager.getMinServers();
-            int currentCloudServers = getServersByType(ServerType.CLOUD).size();
-            int desiredCapacity = Math.max(minServers, currentCloudServers + failedCloudServers.size());
-            cloudManager.scaleServers(desiredCapacity);
-            logger.info("Scaled cloud to {} servers after failover of {} cloud servers.", 
-                        desiredCapacity, failedCloudServers.size());
         }
     }
 
@@ -404,7 +369,7 @@ public class LoadBalancer {
         try {
             Server server = serverRegistry.get(serverId);
             if (server != null) {
-                removeFailedServer(server);
+                serverHealthCoordinator.removeFailedServer(server);
             }
         } finally {
             serverLock.writeLock().unlock();
