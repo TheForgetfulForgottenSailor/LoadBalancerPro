@@ -14,17 +14,20 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.List;
 
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
+import org.springframework.test.context.NestedTestConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -255,6 +258,103 @@ class OAuth2AuthorizationTest {
                 .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")));
     }
 
+    @Nested
+    @NestedTestConfiguration(NestedTestConfiguration.EnclosingConfiguration.OVERRIDE)
+    @SpringBootTest(properties = {
+            "spring.profiles.active=prod",
+            "loadbalancerpro.auth.mode=oauth2",
+            "loadbalancerpro.auth.oauth2.jwk-set-uri=https://auth.example.test/.well-known/jwks.json",
+            "loadbalancerpro.auth.docs-public=true"
+    })
+    @AutoConfigureMockMvc
+    @Import(JwtDecoderTestConfiguration.class)
+    class DocsPublicOverrideTests {
+        @Autowired
+        private MockMvc docsPublicMockMvc;
+
+        @Test
+        void docsPublicAllowsUnauthenticatedOpenApiDocs() throws Exception {
+            docsPublicMockMvc.perform(get("/v3/api-docs"))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.openapi").exists());
+        }
+
+        @Test
+        void docsPublicAllowsUnauthenticatedSwaggerUi() throws Exception {
+            docsPublicMockMvc.perform(get("/swagger-ui/index.html"))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string(containsString("Swagger UI")));
+        }
+
+        @Test
+        void docsPublicDoesNotBypassProtectedMutationRoutes() throws Exception {
+            docsPublicMockMvc.perform(allocationRequest())
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.status", is(401)))
+                    .andExpect(jsonPath("$.error", is("unauthorized")))
+                    .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")));
+        }
+    }
+
+    @Nested
+    @NestedTestConfiguration(NestedTestConfiguration.EnclosingConfiguration.OVERRIDE)
+    @SpringBootTest(properties = {
+            "spring.profiles.active=prod",
+            "loadbalancerpro.auth.mode=oauth2",
+            "loadbalancerpro.auth.oauth2.jwk-set-uri=https://auth.example.test/.well-known/jwks.json",
+            "loadbalancerpro.auth.required-role.lase-shadow=shadow-reader",
+            "loadbalancerpro.auth.required-role.allocation=allocator"
+    })
+    @AutoConfigureMockMvc
+    @Import(JwtDecoderTestConfiguration.class)
+    class CustomRequiredRoleOverrideTests {
+        @Autowired
+        private MockMvc customRoleMockMvc;
+
+        @Test
+        void customLaseShadowRoleAllowsConfiguredRoleAndRejectsDefaultObserver() throws Exception {
+            customRoleMockMvc.perform(get("/api/lase/shadow")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer observer-token"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.status", is(403)))
+                    .andExpect(jsonPath("$.path", is("/api/lase/shadow")));
+
+            customRoleMockMvc.perform(get("/api/lase/shadow")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer shadow-reader-token"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.summary.totalEvaluations").isNumber())
+                    .andExpect(jsonPath("$.recentEvents").isArray());
+
+            customRoleMockMvc.perform(get("/api/lase/shadow")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer allocator-token"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.summary.totalEvaluations").isNumber())
+                    .andExpect(jsonPath("$.recentEvents").isArray());
+        }
+
+        @Test
+        void customAllocationRoleAllowsConfiguredRoleAndRejectsDefaultOperator() throws Exception {
+            customRoleMockMvc.perform(allocationRequest()
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer roles-operator-token"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.status", is(403)))
+                    .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")));
+
+            customRoleMockMvc.perform(allocationRequest()
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer shadow-reader-token"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.status", is(403)))
+                    .andExpect(jsonPath("$.path", is("/api/allocate/capacity-aware")));
+
+            customRoleMockMvc.perform(allocationRequest()
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer allocator-token"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.allocations.api-1").isNumber())
+                    .andExpect(jsonPath("$.error").doesNotExist());
+        }
+    }
+
     private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder allocationRequest() {
         return post("/api/allocate/capacity-aware")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -276,6 +376,8 @@ class OAuth2AuthorizationTest {
                 case "viewer-token" -> jwt(token, "viewer");
                 case "observer-token" -> jwt(token, "observer");
                 case "roles-operator-token" -> jwt(token, Map.of("roles", List.of("operator")));
+                case "shadow-reader-token" -> jwt(token, "shadow-reader");
+                case "allocator-token" -> jwt(token, "allocator");
                 case "role-operator-token" -> jwt(token, Map.of("role", "operator"));
                 case "authorities-operator-token" -> jwt(token, Map.of("authorities", List.of("operator")));
                 case "scope-operator-token" -> jwt(token, Map.of("scope", "operator observer"));
