@@ -8,7 +8,9 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -139,6 +141,16 @@ class LoadBalancerTest {
         server.setWeight(weight);
         server.setCapacity(capacity);
         return server;
+    }
+
+    private void attachCloudManager(CloudManager cloudManager) {
+        try {
+            Field field = LoadBalancer.class.getDeclaredField("cloudManager");
+            field.setAccessible(true);
+            field.set(balancer, cloudManager);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Unable to attach CloudManager for characterization test", e);
+        }
     }
 
     /**
@@ -866,6 +878,54 @@ class LoadBalancerTest {
     }
 
     @Test
+    void testHealthCheckFailoverRedistributesAccumulatedLoadAndUpdatesRoutingState() {
+        logger.info("=== TESTING HEALTH CHECK FAILOVER REDISTRIBUTION STATE ===");
+        Server failed = new Server("FAIL", 10.0, 20.0, 30.0);
+        addServers(failed);
+        assertEquals(90.0, balancer.roundRobin(90.0).get("FAIL"), 0.01,
+            "Single failed server should own all initial accumulated load!");
+        Server survivor = new Server("KEEP", 20.0, 30.0, 40.0);
+        addServers(survivor);
+
+        failed.updateMetrics(100.0, 100.0, 100.0);
+        balancer.checkServerHealth();
+
+        assertFalse(failed.isHealthy(), "Failed server should be marked unhealthy!");
+        assertNull(balancer.getServer("FAIL"), "Health-check failover should remove failed server from lookup!");
+        assertSame(survivor, balancer.getServer("KEEP"), "Surviving server should remain registered!");
+        assertEquals(List.of(survivor), balancer.getServers(), "Public server snapshot should only expose survivor!");
+        assertFalse(balancer.getServerMap().containsKey("FAIL"), "Server map snapshot should omit failed server!");
+
+        Map<String, Double> rebalanced = balancer.rebalanceExistingLoad();
+        assertEquals(Set.of("KEEP"), rebalanced.keySet(), "Redistributed load should only target survivor!");
+        assertEquals(90.0, rebalanced.get("KEEP"), 0.01,
+            "Accumulated load removed from failed server should be redistributed to survivor!");
+
+        Map<String, Double> hashed = balancer.consistentHashing(60.0, 6);
+        assertEquals(Set.of("KEEP"), hashed.keySet(), "Hash ring should route only to survivor after health removal!");
+    }
+
+    @Test
+    void testHealthCheckAllFailedClearsAccumulatedLoadWithoutSurvivors() {
+        logger.info("=== TESTING HEALTH CHECK ALL FAILED ACCUMULATED LOAD CLEANUP ===");
+        Server first = new Server("FAIL-1", 10.0, 20.0, 30.0);
+        Server second = new Server("FAIL-2", 20.0, 30.0, 40.0);
+        addServers(first, second);
+        balancer.roundRobin(120.0);
+
+        first.updateMetrics(100.0, 100.0, 100.0);
+        second.updateMetrics(100.0, 100.0, 100.0);
+        balancer.checkServerHealth();
+
+        assertTrue(balancer.getServers().isEmpty(), "All failed servers should be removed!");
+        assertTrue(balancer.getServerMap().isEmpty(), "Server map snapshot should be empty after all fail!");
+        assertTrue(balancer.rebalanceExistingLoad().isEmpty(),
+            "Removed failed servers should not leave stale accumulated load behind!");
+        assertTrue(balancer.consistentHashing(20.0, 2).isEmpty(),
+            "Hash ring should be empty after all failed servers are removed!");
+    }
+
+    @Test
     void testDistributionStrategiesRejectNegativeData() {
         logger.info("=== TESTING NEGATIVE DATA REJECTION ===");
         addServers(new Server("S1", 10.0, 20.0, 30.0));
@@ -989,6 +1049,71 @@ class LoadBalancerTest {
         assertFalse(server.isHealthy(), "Server should be marked unhealthy after 100% CPU!");
         assertEquals(0, balancer.getServers().size(), "Failed server should be removed after failover!");
         logger.info("Health check with failover test passed: Server removed correctly.");
+    }
+
+    @Test
+    void testHealthCheckCloudFailoverScalesToCurrentCloudPlusFailedCloudCount() {
+        logger.info("=== TESTING CLOUD FAILOVER REPLACEMENT CAPACITY ===");
+        CloudManager cloudManager = mock(CloudManager.class);
+        when(cloudManager.getMinServers()).thenReturn(1);
+        attachCloudManager(cloudManager);
+        Server failedCloud = new Server("CLOUD-FAIL", 10.0, 20.0, 30.0, ServerType.CLOUD);
+        Server survivingCloudOne = new Server("CLOUD-KEEP-1", 20.0, 30.0, 40.0, ServerType.CLOUD);
+        Server survivingCloudTwo = new Server("CLOUD-KEEP-2", 25.0, 35.0, 45.0, ServerType.CLOUD);
+        addServers(failedCloud, survivingCloudOne, survivingCloudTwo);
+
+        failedCloud.updateMetrics(100.0, 100.0, 100.0);
+        balancer.checkServerHealth();
+
+        assertNull(balancer.getServer("CLOUD-FAIL"), "Failed cloud server should be removed!");
+        assertEquals(List.of(survivingCloudOne, survivingCloudTwo), balancer.getServersByType(ServerType.CLOUD),
+            "Only surviving cloud servers should remain in typed snapshot!");
+        verify(cloudManager).getMinServers();
+        verify(cloudManager).scaleServers(3);
+    }
+
+    @Test
+    void testHealthCheckMixedFailuresOnlyCloudFailureTriggersReplacementScale() {
+        logger.info("=== TESTING MIXED FAILURE CLOUD-ONLY REPLACEMENT ===");
+        CloudManager cloudManager = mock(CloudManager.class);
+        when(cloudManager.getMinServers()).thenReturn(1);
+        attachCloudManager(cloudManager);
+        Server failedCloud = new Server("CLOUD-FAIL", 10.0, 20.0, 30.0, ServerType.CLOUD);
+        Server failedOnsite = new Server("ONSITE-FAIL", 10.0, 20.0, 30.0, ServerType.ONSITE);
+        Server survivingCloud = new Server("CLOUD-KEEP", 20.0, 30.0, 40.0, ServerType.CLOUD);
+        addServers(failedCloud, failedOnsite, survivingCloud);
+
+        failedCloud.updateMetrics(100.0, 100.0, 100.0);
+        failedOnsite.updateMetrics(100.0, 100.0, 100.0);
+        balancer.checkServerHealth();
+
+        assertNull(balancer.getServer("CLOUD-FAIL"), "Failed cloud server should be removed!");
+        assertNull(balancer.getServer("ONSITE-FAIL"), "Failed onsite server should be removed!");
+        assertEquals(List.of(survivingCloud), balancer.getServers(), "Only surviving cloud server should remain!");
+        verify(cloudManager).scaleServers(2);
+        verify(cloudManager, never()).scaleServers(3);
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    void testHandleFailoverShimRedistributesThroughHealthPath() {
+        logger.info("=== TESTING HANDLE FAILOVER SHIM HEALTH PATH ===");
+        Server failed = new Server("LEGACY-FAIL", 10.0, 20.0, 30.0);
+        addServers(failed);
+        balancer.roundRobin(70.0);
+        Server survivor = new Server("LEGACY-KEEP", 20.0, 30.0, 40.0);
+        addServers(survivor);
+
+        failed.updateMetrics(100.0, 100.0, 100.0);
+        balancer.handleFailover();
+
+        assertNull(balancer.getServer("LEGACY-FAIL"), "Deprecated shim should remove failed server!");
+        assertSame(survivor, balancer.getServer("LEGACY-KEEP"), "Deprecated shim should retain survivor!");
+        Map<String, Double> rebalanced = balancer.rebalanceExistingLoad();
+        assertEquals(Set.of("LEGACY-KEEP"), rebalanced.keySet(),
+            "Deprecated shim should preserve health-check redistribution path!");
+        assertEquals(70.0, rebalanced.get("LEGACY-KEEP"), 0.01,
+            "Deprecated shim should redistribute failed server accumulated load to survivor!");
     }
 
     @Test
