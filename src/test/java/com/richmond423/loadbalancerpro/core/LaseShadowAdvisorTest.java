@@ -323,6 +323,26 @@ class LaseShadowAdvisorTest {
     }
 
     @Test
+    void loadBalancerPredictiveShadowObservationUsesPredictiveStrategyName() {
+        LaseShadowEventLog eventLog = new LaseShadowEventLog(10);
+        LoadBalancer balancer = balancerWithServers();
+        balancer.setLaseShadowAdvisorForTesting(deterministicAdvisor(true, eventLog));
+        try {
+            LoadDistributionResult result = balancer.predictiveLoadBalancingWithResult(60.0);
+
+            assertFalse(result.allocations().isEmpty());
+            LaseShadowObservabilitySnapshot snapshot = eventLog.snapshot();
+            assertEquals(1, snapshot.recentEvents().size());
+            LaseShadowEvent event = snapshot.recentEvents().get(0);
+            assertEquals("PREDICTIVE", event.strategy());
+            assertEquals("lase-shadow-predictive", event.evaluationId());
+            assertTrue(event.reason().contains("Evaluation lase-shadow-predictive"));
+        } finally {
+            balancer.shutdown();
+        }
+    }
+
+    @Test
     void disabledLoadBalancerAdvisorLeavesNoShadowReport() {
         LoadBalancer balancer = balancerWithServers();
         balancer.setLaseShadowAdvisorForTesting(LaseShadowAdvisor.disabled());

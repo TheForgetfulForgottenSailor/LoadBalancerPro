@@ -66,6 +66,27 @@ class DomainMetricsTest {
     }
 
     @Test
+    void allocationMetricsUseStableStrategyTagsForDistributionMethods() {
+        LoadBalancer balancer = new LoadBalancer(false);
+        try {
+            balancer.addServer(metricServer("S1", 10.0, 1.0, 100.0));
+            balancer.addServer(metricServer("S2", 20.0, 3.0, 100.0));
+
+            balancer.roundRobin(40.0);
+            balancer.leastLoaded(40.0);
+            balancer.weightedDistribution(40.0);
+            balancer.predictiveLoadBalancingWithResult(40.0);
+
+            assertAllocationMetrics("ROUND_ROBIN", 2.0, 0.0);
+            assertAllocationMetrics("LEAST_LOADED", 2.0, 0.0);
+            assertAllocationMetrics("WEIGHTED", 2.0, 0.0);
+            assertAllocationMetrics("PREDICTIVE", 2.0, 0.0);
+        } finally {
+            balancer.shutdown();
+        }
+    }
+
+    @Test
     void cloudScaleDecisionMetricsIncludeDecisionAndSourceTags() throws Exception {
         CloudConfig dryRunConfig = new CloudConfig(ACCESS_KEY, SECRET_KEY, "us-east-1", "lt-test", "subnet-test");
         CloudManager dryRunManager = new CloudManager(
@@ -158,5 +179,20 @@ class DomainMetricsTest {
         CountDownLatch latch = new CountDownLatch(1);
         manager.scaleServersAsync(desiredCapacity, source, ignored -> latch.countDown());
         latch.await(5, TimeUnit.SECONDS);
+    }
+
+    private void assertAllocationMetrics(String strategy, double expectedServerCount, double expectedUnallocatedLoad) {
+        assertEquals(1.0, registry.counter(DomainMetrics.ALLOCATION_REQUESTS, "strategy", strategy).count());
+        assertEquals(expectedServerCount, registry.summary(
+                DomainMetrics.ALLOCATION_SERVER_COUNT, "strategy", strategy).totalAmount());
+        assertEquals(expectedUnallocatedLoad, registry.summary(
+                DomainMetrics.ALLOCATION_UNALLOCATED_LOAD, "strategy", strategy).totalAmount());
+    }
+
+    private static Server metricServer(String id, double load, double weight, double capacity) {
+        Server server = new Server(id, load, load, load, ServerType.ONSITE);
+        server.setWeight(weight);
+        server.setCapacity(capacity);
+        return server;
     }
 }

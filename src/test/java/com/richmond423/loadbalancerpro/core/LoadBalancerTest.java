@@ -305,6 +305,54 @@ class LoadBalancerTest {
     }
 
     @Test
+    void testWeightedDistributionAccumulationFeedsRebalance() {
+        logger.info("=== TESTING WEIGHTED DISTRIBUTION ACCUMULATION ===");
+        addServers(
+            serverWithWeightAndCapacity("S1", 10.0, 20.0, 30.0, 1.0, 100.0),
+            serverWithWeightAndCapacity("S2", 20.0, 30.0, 40.0, 3.0, 100.0)
+        );
+
+        Map<String, Double> first = balancer.weightedDistribution(80.0);
+        Map<String, Double> second = balancer.weightedDistribution(40.0);
+        balancer.setStrategy(LoadBalancer.Strategy.ROUND_ROBIN);
+        Map<String, Double> rebalanced = balancer.rebalanceExistingLoad();
+
+        assertEquals(20.0, first.get("S1"), 0.01, "First weighted split should allocate one quarter to S1!");
+        assertEquals(60.0, first.get("S2"), 0.01, "First weighted split should allocate three quarters to S2!");
+        assertEquals(10.0, second.get("S1"), 0.01, "Second weighted split should allocate one quarter to S1!");
+        assertEquals(30.0, second.get("S2"), 0.01, "Second weighted split should allocate three quarters to S2!");
+        assertEquals(120.0, rebalanced.values().stream().mapToDouble(Double::doubleValue).sum(), 0.01,
+            "Rebalance should preserve accumulated weighted load!");
+        assertEquals(60.0, rebalanced.get("S1"), 0.01, "Round-robin rebalance should split accumulated weighted load!");
+        assertEquals(60.0, rebalanced.get("S2"), 0.01, "Round-robin rebalance should split accumulated weighted load!");
+    }
+
+    @Test
+    void testCapacityAwareResultAccumulationFeedsRebalance() {
+        logger.info("=== TESTING CAPACITY-AWARE RESULT ACCUMULATION ===");
+        addServers(
+            serverWithWeightAndCapacity("S1", 20.0, 20.0, 20.0, 1.0, 100.0),
+            serverWithWeightAndCapacity("S2", 20.0, 20.0, 20.0, 1.0, 100.0)
+        );
+
+        LoadDistributionResult first = balancer.capacityAwareWithResult(80.0);
+        LoadDistributionResult second = balancer.capacityAwareWithResult(20.0);
+        balancer.setStrategy(LoadBalancer.Strategy.ROUND_ROBIN);
+        Map<String, Double> rebalanced = balancer.rebalanceExistingLoad();
+
+        assertEquals(40.0, first.allocations().get("S1"), 0.01, "First capacity-aware split should allocate half to S1!");
+        assertEquals(40.0, first.allocations().get("S2"), 0.01, "First capacity-aware split should allocate half to S2!");
+        assertEquals(0.0, first.unallocatedLoad(), 0.01, "First capacity-aware split should leave no unallocated load!");
+        assertEquals(10.0, second.allocations().get("S1"), 0.01, "Second capacity-aware split should allocate half to S1!");
+        assertEquals(10.0, second.allocations().get("S2"), 0.01, "Second capacity-aware split should allocate half to S2!");
+        assertEquals(0.0, second.unallocatedLoad(), 0.01, "Second capacity-aware split should leave no unallocated load!");
+        assertEquals(100.0, rebalanced.values().stream().mapToDouble(Double::doubleValue).sum(), 0.01,
+            "Rebalance should preserve accumulated capacity-aware load!");
+        assertEquals(50.0, rebalanced.get("S1"), 0.01, "Round-robin rebalance should split accumulated capacity-aware load!");
+        assertEquals(50.0, rebalanced.get("S2"), 0.01, "Round-robin rebalance should split accumulated capacity-aware load!");
+    }
+
+    @Test
     void testLeastLoadedWithUnequalLoadScoresKeepsCurrentEqualAllocation() {
         logger.info("=== TESTING LEAST LOADED CURRENT ALLOCATION CONTRACT ===");
         addServers(new Server("LOW", 0.0, 0.0, 30.0), new Server("HIGH", 90.0, 90.0, 90.0));
@@ -783,6 +831,38 @@ class LoadBalancerTest {
         assertTrue(balancer.capacityAware(100.0).isEmpty(), "Capacity-aware should skip all-unhealthy servers!");
         assertTrue(balancer.predictiveLoadBalancing(100.0).isEmpty(), "Predictive should skip all-unhealthy servers!");
         assertTrue(balancer.consistentHashing(100.0, 10).isEmpty(), "Consistent hashing should skip all-unhealthy servers!");
+    }
+
+    @Test
+    void testAllUnhealthyCapacityAwareResultReportsAllLoadUnallocated() {
+        logger.info("=== TESTING ALL UNHEALTHY CAPACITY-AWARE RESULT CONTRACT ===");
+        Server s1 = serverWithWeightAndCapacity("S1", 10.0, 20.0, 30.0, 1.0, 100.0);
+        Server s2 = serverWithWeightAndCapacity("S2", 20.0, 30.0, 40.0, 1.0, 100.0);
+        s1.setHealthy(false);
+        s2.setHealthy(false);
+        addServers(s1, s2);
+
+        LoadDistributionResult result = balancer.capacityAwareWithResult(75.0);
+
+        assertTrue(result.allocations().isEmpty(), "Capacity-aware result should skip all-unhealthy servers!");
+        assertEquals(75.0, result.unallocatedLoad(), 0.01,
+            "Capacity-aware result should report all requested load unallocated when all servers are unhealthy!");
+    }
+
+    @Test
+    void testAllUnhealthyPredictiveResultReportsAllLoadUnallocated() {
+        logger.info("=== TESTING ALL UNHEALTHY PREDICTIVE RESULT CONTRACT ===");
+        Server s1 = serverWithWeightAndCapacity("S1", 10.0, 20.0, 30.0, 1.0, 100.0);
+        Server s2 = serverWithWeightAndCapacity("S2", 20.0, 30.0, 40.0, 1.0, 100.0);
+        s1.setHealthy(false);
+        s2.setHealthy(false);
+        addServers(s1, s2);
+
+        LoadDistributionResult result = balancer.predictiveLoadBalancingWithResult(75.0);
+
+        assertTrue(result.allocations().isEmpty(), "Predictive result should skip all-unhealthy servers!");
+        assertEquals(75.0, result.unallocatedLoad(), 0.01,
+            "Predictive result should report all requested load unallocated when all servers are unhealthy!");
     }
 
     @Test

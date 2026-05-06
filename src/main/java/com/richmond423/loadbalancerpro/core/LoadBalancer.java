@@ -20,13 +20,12 @@ public class LoadBalancer {
     private static final int SHUTDOWN_RETRIES = 2;
 
     private final ServerRegistry serverRegistry = new ServerRegistry();
+    private final LoadDistributionEngine loadDistributionEngine;
     private final List<String> alertLog = new CopyOnWriteArrayList<>();
-    private final Map<String, Double> currentDistribution = new ConcurrentHashMap<>();
     private final ConsistentHashRing consistentHashRing;
     private final ServerMonitor monitor;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final ReentrantReadWriteLock serverLock = new ReentrantReadWriteLock();
-    private final double predictiveLoadFactor;
     private final double maxUsageThreshold;
     private CloudManager cloudManager;
     private volatile LaseShadowAdvisor laseShadowAdvisor;
@@ -58,7 +57,7 @@ public class LoadBalancer {
                          LaseShadowAdvisor laseShadowAdvisor) {
         this.maxUsageThreshold = Math.max(0, maxUsageThreshold);
         this.consistentHashRing = new ConsistentHashRing(hashReplicas, logger);
-        this.predictiveLoadFactor = Math.max(1.0, predictiveLoadFactor);
+        this.loadDistributionEngine = new LoadDistributionEngine(Math.max(1.0, predictiveLoadFactor));
         this.monitor = new ServerMonitor(this, this.maxUsageThreshold, 1000, 10.0, null);
         this.laseShadowAdvisor = Objects.requireNonNull(laseShadowAdvisor, "laseShadowAdvisor cannot be null");
     }
@@ -168,8 +167,7 @@ public class LoadBalancer {
     }
 
     private double removeFailedServer(Server failed) {
-        Double data = currentDistribution.remove(failed.getServerId());
-        double removedData = data != null ? data : 0;
+        double removedData = loadDistributionEngine.removeServerAllocation(failed.getServerId());
         serverRegistry.remove(failed);
         consistentHashRing.removeServer(failed);
         return removedData;
@@ -183,7 +181,7 @@ public class LoadBalancer {
                 return;
             }
             Map<String, Double> newDist = leastLoaded(redistributedData);
-            currentDistribution.putAll(newDist);
+            loadDistributionEngine.putAllAllocations(newDist);
             logger.info("Redistributed {}GB: {}", redistributedData, newDist);
         }
     }
@@ -201,38 +199,20 @@ public class LoadBalancer {
 
     public Map<String, Double> roundRobin(double totalData) {
         validateDistributionInput(totalData);
-        return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = LoadDistributionPlanner.roundRobin(servers, totalData);
-            for (Map.Entry<String, Double> entry : dist.entrySet()) {
-                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
-            }
-            DomainMetrics.recordAllocation("ROUND_ROBIN", servers.size(), 0.0);
-            return dist;
-        });
+        return distributeWithHealthyServers(totalData,
+                servers -> loadDistributionEngine.roundRobin(servers, totalData));
     }
 
     public Map<String, Double> leastLoaded(double totalData) {
         validateDistributionInput(totalData);
-        return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = LoadDistributionPlanner.leastLoaded(servers, totalData);
-            for (Map.Entry<String, Double> entry : dist.entrySet()) {
-                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
-            }
-            DomainMetrics.recordAllocation("LEAST_LOADED", servers.size(), 0.0);
-            return dist;
-        });
+        return distributeWithHealthyServers(totalData,
+                servers -> loadDistributionEngine.leastLoaded(servers, totalData));
     }
 
     public Map<String, Double> weightedDistribution(double totalData) {
         validateDistributionInput(totalData);
-        return distributeWithHealthyServers(totalData, servers -> {
-            Map<String, Double> dist = LoadDistributionPlanner.weighted(servers, totalData);
-            for (Map.Entry<String, Double> entry : dist.entrySet()) {
-                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
-            }
-            DomainMetrics.recordAllocation("WEIGHTED", servers.size(), 0.0);
-            return dist;
-        });
+        return distributeWithHealthyServers(totalData,
+                servers -> loadDistributionEngine.weightedDistribution(servers, totalData));
     }
 
     public Map<String, Double> consistentHashing(double totalData, int numKeys) {
@@ -253,7 +233,7 @@ public class LoadBalancer {
             Server server = consistentHashRing.selectHealthyServer("data-" + i);
             if (server != null) {
                 dist.merge(server.getServerId(), dataPerKey, Double::sum);
-                currentDistribution.merge(server.getServerId(), dataPerKey, Double::sum);
+                loadDistributionEngine.accumulate(server.getServerId(), dataPerKey);
             } else {
                 logger.warn("No healthy servers found for data key {}", i);
             }
@@ -268,14 +248,8 @@ public class LoadBalancer {
 
     public LoadDistributionResult capacityAwareWithResult(double totalData) {
         validateDistributionInput(totalData);
-        LoadDistributionResult result = distributeWithHealthyServersResult(totalData, servers -> {
-            LoadDistributionResult distributionResult = LoadDistributionPlanner.capacityAwareResult(servers, totalData);
-            for (Map.Entry<String, Double> entry : distributionResult.allocations().entrySet()) {
-                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
-            }
-            DomainMetrics.recordAllocation("CAPACITY_AWARE", servers.size(), distributionResult.unallocatedLoad());
-            return distributionResult;
-        });
+        LoadDistributionResult result = distributeWithHealthyServersResult(totalData,
+                servers -> loadDistributionEngine.capacityAwareWithResult(servers, totalData));
         observeLaseShadow("CAPACITY_AWARE", totalData, result);
         return result;
     }
@@ -286,29 +260,14 @@ public class LoadBalancer {
 
     public LoadDistributionResult predictiveLoadBalancingWithResult(double totalData) {
         validateDistributionInput(totalData);
-        LoadDistributionResult result = distributeWithHealthyServersResult(totalData, servers -> {
-            LoadDistributionResult distributionResult = LoadDistributionPlanner.predictiveResult(
-                servers, totalData, calculatePredictedLoads(servers));
-            for (Map.Entry<String, Double> entry : distributionResult.allocations().entrySet()) {
-                currentDistribution.merge(entry.getKey(), entry.getValue(), Double::sum);
-            }
-            DomainMetrics.recordAllocation("PREDICTIVE", servers.size(), distributionResult.unallocatedLoad());
-            return distributionResult;
-        });
+        LoadDistributionResult result = distributeWithHealthyServersResult(totalData,
+                servers -> loadDistributionEngine.predictiveLoadBalancingWithResult(servers, totalData));
         observeLaseShadow("PREDICTIVE", totalData, result);
         return result;
     }
 
     public ScalingRecommendation recommendScaling(double unallocatedLoad, double targetCapacityPerServer) {
         return ScalingRecommendation.forUnallocatedLoad(unallocatedLoad, targetCapacityPerServer);
-    }
-
-    private Map<String, Double> calculatePredictedLoads(List<Server> servers) {
-        Map<String, Double> predicted = new HashMap<>();
-        for (Server server : servers) {
-            predicted.put(server.getServerId(), server.getLoadScore() * predictiveLoadFactor);
-        }
-        return predicted;
     }
 
     public void importServerLogs(String filename, String format) {
@@ -467,12 +426,12 @@ public class LoadBalancer {
     }
 
     public Map<String, Double> rebalanceExistingLoad() {
-        double totalData = currentDistribution.values().stream().mapToDouble(Double::doubleValue).sum();
+        double totalData = loadDistributionEngine.totalAccumulatedLoad();
         if (totalData <= 0) {
             logger.info("No existing distributed load to rebalance.");
             return Collections.emptyMap();
         }
-        currentDistribution.clear();
+        loadDistributionEngine.clearAccumulatedLoad();
         return strategy == Strategy.LEAST_LOADED ? leastLoaded(totalData) : roundRobin(totalData);
     }
 
