@@ -4,7 +4,7 @@
 
 - Version: v2.4.2
 - Baseline branch: loadbalancerpro-clean
-- Baseline HEAD: ac3950c912986a56a0466cef1efe6a5c9632025b
+- Baseline HEAD: 1a63999
 - Purpose: document current auth behavior, guardrails, and future hardening before changing route security semantics
 
 ## 1. Current Auth Model
@@ -43,6 +43,9 @@
 - OAuth2 missing and invalid token handling.
 - OAuth2 role gates.
 - OAuth2 docs gating.
+- OAuth2 `loadbalancerpro.auth.docs-public=true` behavior with mocked JWT authorization configuration.
+- OAuth2 custom `loadbalancerpro.auth.required-role.*` override behavior.
+- PR #24 added test-only coverage for unauthenticated OpenAPI/Swagger access when `docs-public=true`, confirmed `docs-public=true` does not open protected mutation/allocation routes, and covered custom role overrides for `/api/lase/shadow` and allocation endpoints.
 - CORS behavior.
 - Request-size ordering.
 - Prod/local actuator exposure.
@@ -63,14 +66,15 @@ Note: `ProdApiKeySnakeCaseModeAliasProtectionTest` exists as a class inside `Pro
 
 Low-risk:
 
-- `loadbalancerpro.auth.docs-public=true` OAuth2 behavior could use explicit tests later.
-- Custom OAuth2 role property overrides could use explicit tests later.
 - README/security docs can be aligned after this plan.
+- Additional negative-path/security regression tests can be added where new auth settings, error paths, or profile combinations become important.
 
 Medium-risk:
 
 - Making API-key mode Swagger/OpenAPI private by default.
 - Changing DTO/schema/auth docs if tests currently expect public docs.
+- Stronger deployment identity integration beyond demo API-key and JWT role checks.
+- Trusted proxy or edge enforcement guidance for production-like deployments.
 
 High-risk:
 
@@ -78,16 +82,18 @@ High-risk:
 - Changing actuator auth behavior.
 - Merging API-key and OAuth2 enforcement paths without design.
 - Changing cloud mutation/auth coupling without separate guardrails.
+- Claiming production-grade authorization without deployment-specific identity, secret rotation, edge controls, and operational policy.
 
 ## 6. Recommended Hardening Sequence
 
 1. Keep this plan as the source of truth.
-2. Add missing OAuth2 `docs-public=true` tests.
-3. Add custom role override tests.
-4. Align README/security docs with actual behavior.
-5. Only then consider OpenAPI docs/privacy changes.
-6. Do not change route behavior without focused tests.
-7. Keep cloud mutation guardrails independent from auth.
+2. Keep PR #24 OAuth2 `docs-public=true` and custom-role override tests as characterization coverage before changing auth semantics.
+3. Align README/security docs with actual behavior when auth behavior or operator guidance changes.
+4. Only then consider OpenAPI docs/privacy changes.
+5. Add deployment-specific secret management and rotation guidance before any production-readiness claim.
+6. Add trusted proxy, edge enforcement, and stronger deployment identity integration only with focused design and tests.
+7. Do not change route behavior without focused tests.
+8. Keep cloud mutation guardrails independent from auth.
 
 ## 7. Do Not Do Yet
 
@@ -95,6 +101,7 @@ High-risk:
 - Do not change actuator access behavior casually.
 - Do not alter OAuth2 role semantics without tests.
 - Do not log secrets, tokens, JWTs, or API keys.
+- Do not claim production-grade auth is complete without deployment-specific identity, secret rotation, trusted edge enforcement, and operator controls.
 - Do not weaken fail-closed behavior.
 - Do not merge API-key and OAuth2 paths casually.
 - Do not treat auth as the only cloud safety gate.
