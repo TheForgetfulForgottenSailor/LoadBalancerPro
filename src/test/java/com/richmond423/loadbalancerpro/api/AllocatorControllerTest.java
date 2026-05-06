@@ -435,6 +435,21 @@ class AllocatorControllerTest {
     }
 
     @Test
+    void unknownApiRouteReturnsFramework404WithoutBodyOrDiagnostics() throws Exception {
+        String responseBody = mockMvc.perform(get("/api/does-not-exist"))
+                .andExpect(status().isNotFound())
+                .andExpect(header().doesNotExist("Content-Type"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertTrue(responseBody.isEmpty(), "Framework 404 currently returns no response body.");
+        assertFalse(responseBody.contains("trace"), "Framework 404 response must not expose trace data.");
+        assertFalse(responseBody.contains("exception"), "Framework 404 response must not expose exception data.");
+        assertFalse(responseBody.contains("stackTrace"), "Framework 404 response must not expose stack traces.");
+    }
+
+    @Test
     void malformedJsonReturnsConsistentSafeErrorShape() throws Exception {
         mockMvc.perform(post("/api/allocate/capacity-aware")
                         .contentType(MediaType.APPLICATION_JSON)
