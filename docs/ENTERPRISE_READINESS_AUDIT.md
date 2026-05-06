@@ -83,13 +83,15 @@ Enterprise impact: CI, CodeQL, CODEOWNERS, and review expectations exist, but Gi
 
 Recommended action: configure branch protection or rulesets for `loadbalancerpro-clean` requiring pull requests, passing CI, passing CodeQL, CODEOWNERS review for sensitive paths, and blocking force-pushes/deletions.
 
-### 2. Open CodeQL CSRF Alert Requires Triage
+### 2. Open CodeQL CSRF Alert Requires Formal Disposition
 
 The current open CodeQL alert is `java/spring-disabled-csrf-protection` at `ApiSecurityConfiguration.java:51`.
 
 Enterprise impact: The application is designed as a stateless API with API-key and bearer-token flows, so disabled CSRF may be acceptable. It should still be explicitly triaged, documented, or fixed. Leaving a high-severity SAST alert open weakens enterprise review posture.
 
-Recommended action: triage the alert in a focused security review. If accepted as a stateless API false positive, document the rationale. If not accepted, design a targeted security-config change with tests.
+Current action: `evidence/SECURITY_POSTURE.md` now documents the stateless API rationale, no-cookie auth model, non-credentialed CORS posture, header-auth protected mutation routes, and revisit conditions for cookie/session or credentialed browser flows.
+
+Recommended action: formally dismiss the alert with the documented stateless API rationale if that disposition is accepted. If not accepted, design a targeted security-config change with tests.
 
 ### 3. Security Policy Needed Refresh
 
@@ -196,9 +198,8 @@ Remaining cloud gaps:
    - Require CODEOWNERS review for sensitive paths.
    - Block force-pushes and branch deletion.
 
-2. Triage the open CodeQL CSRF alert.
-   - Treat this as a focused security-review task.
-   - Document stateless API rationale if accepting the alert.
+2. Formally disposition the open CodeQL CSRF alert.
+   - Dismiss with the documented stateless API rationale if accepted.
    - Add tests if any security behavior changes.
 
 3. Keep security docs current.

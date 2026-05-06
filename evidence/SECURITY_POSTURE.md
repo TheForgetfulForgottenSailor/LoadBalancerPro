@@ -9,6 +9,19 @@ This document summarizes the current security and safety posture for the portfol
 - OAuth2 mode is explicit opt-in, validates JWTs through Spring Security resource-server support, fails startup without issuer or JWK configuration, gates Swagger/OpenAPI by default, and applies role checks for observer/operator routes.
 - CORS preflight supports the documented browser flow, including `Authorization`, without bypassing protected routes.
 
+## CSRF Posture
+
+CodeQL flags the current Spring Security configuration with `java/spring-disabled-csrf-protection`. The current disposition is accepted for the stateless JSON API design, not a claim that CSRF is irrelevant for every future deployment.
+
+- CSRF is intentionally disabled for the current stateless API design.
+- The app does not use browser session or form-login authentication.
+- Spring Security is configured with `SessionCreationPolicy.STATELESS`, and HTTP Basic, form login, and logout are disabled.
+- CORS uses `allowCredentials(false)`.
+- Protected mutating routes require `X-API-Key` in prod/cloud-sandbox API-key mode or OAuth2 bearer JWT roles in OAuth2 mode.
+- Enabling CSRF would require CSRF token plumbing and could break legitimate header-auth API clients without a meaningful benefit under the current no-cookie auth model.
+
+Revisit this disposition if cookie/session authentication, credentialed CORS, or browser ambient-credential flows are introduced.
+
 ## Telemetry Posture
 
 - OTLP metrics export is disabled by default.
