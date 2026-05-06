@@ -75,6 +75,9 @@ class CloudSandboxProfileConfigurationTest {
         assertEquals("1", environment.getProperty("cloud.maxScaleStep"));
         assertEquals("sandbox", environment.getProperty("cloud.environment"));
         assertEquals("lbp-sandbox-", environment.getProperty("cloud.resourceNamePrefix"));
+        assertEquals("", environment.getProperty("cloud.allowedAwsAccountIds", ""));
+        assertEquals("", environment.getProperty("cloud.currentAwsAccountId", ""));
+        assertEquals("", environment.getProperty("cloud.allowedRegions", ""));
         assertFalse(allocatorService.isLaseShadowEnabledForTesting());
     }
 
