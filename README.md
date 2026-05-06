@@ -560,9 +560,11 @@ curl -X POST http://localhost:8080/api/allocate/capacity-aware \
 
 The allocation APIs are calculation-only. Scaling recommendations are simulations and do not call `CloudManager` or AWS.
 
-`POST /api/routing/compare` compares supported routing strategies against caller-provided candidate telemetry. Supported strategy IDs are `TAIL_LATENCY_POWER_OF_TWO` and `WEIGHTED_LEAST_LOAD`. It is read-only and recommendation-only: it returns strategy results and explanations, does not call `CloudManager` or AWS, does not mutate cloud resources, does not mutate `LoadBalancer` allocation state, and does not alter the capacity-aware or predictive allocation endpoints.
+`POST /api/routing/compare` compares supported routing strategies against caller-provided candidate telemetry. Supported strategy IDs are `ROUND_ROBIN`, `TAIL_LATENCY_POWER_OF_TWO`, and `WEIGHTED_LEAST_LOAD`. It is read-only and recommendation-only: it returns strategy results and explanations, does not call `CloudManager` or AWS, does not mutate cloud resources, does not mutate `LoadBalancer` allocation state, and does not alter the capacity-aware or predictive allocation endpoints.
 
 `WEIGHTED_LEAST_LOAD` evaluates all healthy candidates and normalizes in-flight request count, queue depth, latency, tail latency, and error rate by effective capacity, then applies optional server `weight`. Missing or zero routing weight defaults to `1.0`; very small positive weight is clamped safely during scoring; negative or non-finite weight is rejected.
+
+`ROUND_ROBIN` rotates across healthy request-level candidates in request order, skips unhealthy candidates, and returns an explanation with no score map because the strategy does not score candidates.
 
 Routing comparison request:
 
@@ -570,7 +572,7 @@ Routing comparison request:
 curl -X POST http://localhost:8080/api/routing/compare \
   -H "Content-Type: application/json" \
   -d '{
-    "strategies": ["TAIL_LATENCY_POWER_OF_TWO", "WEIGHTED_LEAST_LOAD"],
+    "strategies": ["TAIL_LATENCY_POWER_OF_TWO", "WEIGHTED_LEAST_LOAD", "ROUND_ROBIN"],
     "servers": [
       {
         "serverId": "green",
@@ -615,7 +617,7 @@ Routing comparison response:
 
 ```json
 {
-  "requestedStrategies": ["TAIL_LATENCY_POWER_OF_TWO", "WEIGHTED_LEAST_LOAD"],
+  "requestedStrategies": ["TAIL_LATENCY_POWER_OF_TWO", "WEIGHTED_LEAST_LOAD", "ROUND_ROBIN"],
   "candidateCount": 2,
   "timestamp": "2026-05-03T00:00:00Z",
   "results": [
@@ -640,12 +642,20 @@ Routing comparison response:
         "blue": 0.471,
         "green": 0.075
       }
+    },
+    {
+      "strategyId": "ROUND_ROBIN",
+      "status": "SUCCESS",
+      "chosenServerId": "green",
+      "reason": "Chose green using round-robin position 1 of 2 healthy candidates.",
+      "candidateServersConsidered": ["green", "blue"],
+      "scores": {}
     }
   ]
 }
 ```
 
-If `strategies` is omitted, the endpoint defaults to the registered routing strategy set, currently `TAIL_LATENCY_POWER_OF_TWO` followed by `WEIGHTED_LEAST_LOAD`. Invalid request bodies, unsupported strategies, duplicate server IDs, invalid routing weight, unsupported media types, and wrong HTTP methods return structured JSON errors.
+If `strategies` is omitted, the endpoint defaults to the registered routing strategy set, currently `TAIL_LATENCY_POWER_OF_TWO`, followed by `WEIGHTED_LEAST_LOAD`, followed by `ROUND_ROBIN`. Invalid request bodies, unsupported strategies, duplicate server IDs, invalid routing weight, unsupported media types, and wrong HTTP methods return structured JSON errors.
 
 `GET /api/lase/shadow` returns the bounded in-memory LASE Shadow Advisor observability snapshot: aggregate shadow-evaluation counts, fail-safe counts, recommendation counts, agreement rate, and recent events. The endpoint is shadow-only: it reports what the internal LASE advisor observed or recommended after normal allocation decisions, and it does not change routing, allocation, CloudManager, AWS, or cloud-scaling behavior. Agreement rate currently means the LASE recommended server matched the top server selected by the normal allocation result when both values are comparable.
 
