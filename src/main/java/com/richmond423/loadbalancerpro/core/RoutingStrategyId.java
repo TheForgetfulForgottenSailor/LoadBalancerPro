@@ -7,6 +7,7 @@ import java.util.Optional;
 public enum RoutingStrategyId {
     TAIL_LATENCY_POWER_OF_TWO("TAIL_LATENCY_POWER_OF_TWO"),
     WEIGHTED_LEAST_LOAD("WEIGHTED_LEAST_LOAD"),
+    WEIGHTED_ROUND_ROBIN("WEIGHTED_ROUND_ROBIN"),
     ROUND_ROBIN("ROUND_ROBIN");
 
     private final String externalName;

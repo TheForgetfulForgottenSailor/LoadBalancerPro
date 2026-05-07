@@ -112,13 +112,16 @@ class RoutingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requestedStrategies[0]", is("TAIL_LATENCY_POWER_OF_TWO")))
                 .andExpect(jsonPath("$.requestedStrategies[1]", is("WEIGHTED_LEAST_LOAD")))
-                .andExpect(jsonPath("$.requestedStrategies[2]", is("ROUND_ROBIN")))
+                .andExpect(jsonPath("$.requestedStrategies[2]", is("WEIGHTED_ROUND_ROBIN")))
+                .andExpect(jsonPath("$.requestedStrategies[3]", is("ROUND_ROBIN")))
                 .andExpect(jsonPath("$.results[0].strategyId", is("TAIL_LATENCY_POWER_OF_TWO")))
                 .andExpect(jsonPath("$.results[0].chosenServerId", is("green")))
                 .andExpect(jsonPath("$.results[1].strategyId", is("WEIGHTED_LEAST_LOAD")))
                 .andExpect(jsonPath("$.results[1].chosenServerId", is("green")))
-                .andExpect(jsonPath("$.results[2].strategyId", is("ROUND_ROBIN")))
-                .andExpect(jsonPath("$.results[2].chosenServerId", is("green")));
+                .andExpect(jsonPath("$.results[2].strategyId", is("WEIGHTED_ROUND_ROBIN")))
+                .andExpect(jsonPath("$.results[2].chosenServerId", is("green")))
+                .andExpect(jsonPath("$.results[3].strategyId", is("ROUND_ROBIN")))
+                .andExpect(jsonPath("$.results[3].chosenServerId", is("green")));
     }
 
     @Test
@@ -172,6 +175,61 @@ class RoutingControllerTest {
 
             assertTrue(mockedCloudManager.constructed().isEmpty(),
                     "Weighted routing comparison must not construct CloudManager or call AWS paths.");
+        }
+    }
+
+    @Test
+    void explicitWeightedRoundRobinRequestUsesRoutingWeightWithoutCloudMutationPath() throws Exception {
+        try (MockedConstruction<CloudManager> mockedCloudManager =
+                     Mockito.mockConstruction(CloudManager.class)) {
+            mockMvc.perform(routingCompare("""
+                            {
+                              "strategies": ["WEIGHTED_ROUND_ROBIN"],
+                              "servers": [
+                                {
+                                  "serverId": "base",
+                                  "healthy": true,
+                                  "inFlightRequestCount": 20,
+                                  "configuredCapacity": 100.0,
+                                  "estimatedConcurrencyLimit": 100.0,
+                                  "weight": 1.0,
+                                  "averageLatencyMillis": 10.0,
+                                  "p95LatencyMillis": 20.0,
+                                  "p99LatencyMillis": 40.0,
+                                  "recentErrorRate": 0.0,
+                                  "queueDepth": 0
+                                },
+                                {
+                                  "serverId": "weighted",
+                                  "healthy": true,
+                                  "inFlightRequestCount": 20,
+                                  "configuredCapacity": 100.0,
+                                  "estimatedConcurrencyLimit": 100.0,
+                                  "weight": 4.0,
+                                  "averageLatencyMillis": 10.0,
+                                  "p95LatencyMillis": 20.0,
+                                  "p99LatencyMillis": 40.0,
+                                  "recentErrorRate": 0.0,
+                                  "queueDepth": 0
+                                }
+                              ]
+                            }
+                            """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.requestedStrategies[0]", is("WEIGHTED_ROUND_ROBIN")))
+                    .andExpect(jsonPath("$.candidateCount", is(2)))
+                    .andExpect(jsonPath("$.results[0].strategyId", is("WEIGHTED_ROUND_ROBIN")))
+                    .andExpect(jsonPath("$.results[0].status", is("SUCCESS")))
+                    .andExpect(jsonPath("$.results[0].chosenServerId", is("weighted")))
+                    .andExpect(jsonPath("$.results[0].candidateServersConsidered[0]", is("base")))
+                    .andExpect(jsonPath("$.results[0].candidateServersConsidered[1]", is("weighted")))
+                    .andExpect(jsonPath("$.results[0].scores.base", is(1.0)))
+                    .andExpect(jsonPath("$.results[0].scores.weighted", is(4.0)))
+                    .andExpect(jsonPath("$.results[0].reason", containsString("smooth weighted round-robin")))
+                    .andExpect(jsonPath("$.error").doesNotExist());
+
+            assertTrue(mockedCloudManager.constructed().isEmpty(),
+                    "Weighted round-robin routing comparison must not construct CloudManager or call AWS paths.");
         }
     }
 

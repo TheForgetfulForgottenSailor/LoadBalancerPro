@@ -15,6 +15,7 @@ public final class RoutingStrategyRegistry {
         this(List.of(
                 new TailLatencyPowerOfTwoStrategy(),
                 new WeightedLeastLoadStrategy(),
+                new WeightedRoundRobinRoutingStrategy(),
                 new RoundRobinRoutingStrategy()));
     }
 
