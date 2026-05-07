@@ -4,6 +4,8 @@ Date: 2026-05-06
 
 This document refreshes and supersedes the earlier 2026-05-03 enterprise readiness audit. The older audit reflected a v1.2-era repository state and is no longer accurate for the current `loadbalancerpro-clean` branch.
 
+Security posture refresh: a 2026-05-07 docs/evidence-only pass reviewed the current `loadbalancerpro-clean` baseline at `daa4817e9b0c937919dedc8340209e3d9338edff` after PR #39. It did not change behavior; it refreshed evidence around API-key posture, routing comparison safety, actuator exposure, cloud guardrails, and the documented CodeQL CSRF disposition.
+
 ## Snapshot
 
 - Branch: `loadbalancerpro-clean`
@@ -83,15 +85,15 @@ Enterprise impact: CI, CodeQL, CODEOWNERS, and review expectations exist, but Gi
 
 Recommended action: configure branch protection or rulesets for `loadbalancerpro-clean` requiring pull requests, passing CI, passing CodeQL, CODEOWNERS review for sensitive paths, and blocking force-pushes/deletions.
 
-### 2. Open CodeQL CSRF Alert Requires Formal Disposition
+### 2. CodeQL CSRF Disposition Is Documented
 
-The current open CodeQL alert is `java/spring-disabled-csrf-protection` at `ApiSecurityConfiguration.java:51`.
+The earlier audit identified a CodeQL `java/spring-disabled-csrf-protection` finding at `ApiSecurityConfiguration.java:51`. This document does not assert current GitHub alert UI state.
 
-Enterprise impact: The application is designed as a stateless API with API-key and bearer-token flows, so disabled CSRF may be acceptable. It should still be explicitly triaged, documented, or fixed. Leaving a high-severity SAST alert open weakens enterprise review posture.
+Enterprise impact: The application is designed as a stateless API with API-key and bearer-token flows, so disabled CSRF is accepted for the current no-cookie JSON API design. That disposition is evidence-backed, but it should be revisited if cookie/session authentication, credentialed CORS, or browser ambient-credential flows are introduced.
 
-Current action: `evidence/SECURITY_POSTURE.md` now documents the stateless API rationale, no-cookie auth model, non-credentialed CORS posture, header-auth protected mutation routes, and revisit conditions for cookie/session or credentialed browser flows.
+Current action: `evidence/SECURITY_POSTURE.md` documents the stateless API rationale, no-cookie auth model, non-credentialed CORS posture, header-auth protected mutation routes, and revisit conditions for cookie/session or credentialed browser flows.
 
-Recommended action: formally dismiss the alert with the documented stateless API rationale if that disposition is accepted. If not accepted, design a targeted security-config change with tests.
+Recommended action: keep the evidence disposition aligned with the repository and GitHub security-alert workflow. If a GitHub alert is still open, close or dismiss it with the documented stateless API rationale only if the maintainer accepts that disposition; otherwise design a targeted security-config change with tests.
 
 ### 3. Security Policy Needed Refresh
 
@@ -198,8 +200,8 @@ Remaining cloud gaps:
    - Require CODEOWNERS review for sensitive paths.
    - Block force-pushes and branch deletion.
 
-2. Formally disposition the open CodeQL CSRF alert.
-   - Dismiss with the documented stateless API rationale if accepted.
+2. Keep the CodeQL CSRF disposition aligned with repository evidence and GitHub alert state.
+   - Use the documented stateless API rationale if the maintainer accepts it.
    - Add tests if any security behavior changes.
 
 3. Keep security docs current.
@@ -217,4 +219,4 @@ Remaining cloud gaps:
 
 LoadBalancerPro is enterprise-demo ready and credible as a hardened portfolio product. It is not enterprise-production ready.
 
-The next highest-value enterprise move is repository enforcement and security-alert triage, not another feature: configure branch protection/rulesets, resolve or document the CodeQL CSRF alert, keep security docs current, and preserve the project's conservative no-overclaiming posture.
+The next highest-value enterprise move is repository enforcement and security-alert hygiene, not another feature: configure branch protection/rulesets, keep the CodeQL CSRF disposition aligned with evidence and GitHub alert state, keep security docs current, and preserve the project's conservative no-overclaiming posture.

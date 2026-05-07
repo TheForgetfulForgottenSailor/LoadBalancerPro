@@ -2,16 +2,18 @@
 
 This document summarizes the current security and safety posture for the portfolio release evidence set. It is evidence for the lab implementation, not a claim of complete production security.
 
+Audited baseline: `loadbalancerpro-clean` at `daa4817e9b0c937919dedc8340209e3d9338edff` after PR #39. The 2026-05-07 API key/security audit found no source-hardening requirement; this document records the current evidence posture and deployment caveats.
+
 ## Auth/RBAC Posture
 
-- Local/default mode remains convenient for demos and does not require an API key.
-- Prod and cloud-sandbox API-key mode protect mutation endpoints and LASE shadow observability while keeping `/api/health` public.
-- OAuth2 mode is explicit opt-in, validates JWTs through Spring Security resource-server support, fails startup without issuer or JWK configuration, gates Swagger/OpenAPI by default, and applies role checks for observer/operator routes.
+- Local/default mode remains demo-open for API usage and does not require an API key.
+- Prod and cloud-sandbox API-key mode protect `POST`/`PUT`/`PATCH` requests under `/api/**` and `GET /api/lase/**` with `X-API-Key`, while keeping `/api/health` public.
+- OAuth2 mode is explicit opt-in, validates JWTs through Spring Security resource-server support, fails startup without issuer or JWK configuration, gates Swagger/OpenAPI by default, requires the allocation role for routing/allocation routes, and requires observer/operator-style roles for LASE shadow access.
 - CORS preflight supports the documented browser flow, including `Authorization`, without bypassing protected routes.
 
 ## CSRF Posture
 
-CodeQL flags the current Spring Security configuration with `java/spring-disabled-csrf-protection`. The current disposition is accepted for the stateless JSON API design, not a claim that CSRF is irrelevant for every future deployment.
+CodeQL flags the current Spring Security configuration with `java/spring-disabled-csrf-protection`. The documented disposition is accepted for the stateless JSON API design, not a claim that CSRF is irrelevant for every future deployment or hosting model.
 
 - CSRF is intentionally disabled for the current stateless API design.
 - The app does not use browser session or form-login authentication.
@@ -21,6 +23,13 @@ CodeQL flags the current Spring Security configuration with `java/spring-disable
 - Enabling CSRF would require CSRF token plumbing and could break legitimate header-auth API clients without a meaningful benefit under the current no-cookie auth model.
 
 Revisit this disposition if cookie/session authentication, credentialed CORS, or browser ambient-credential flows are introduced.
+
+## API And Actuator Exposure Posture
+
+- `POST /api/routing/compare` is read-only and shadow-style: it compares caller-provided request-level routing candidates, does not call `CloudManager` or AWS, and does not mutate legacy `LoadBalancer` allocation state.
+- Local/demo Actuator exposure includes health, info, metrics, and Prometheus for portfolio validation.
+- Prod and cloud-sandbox profiles expose Actuator health/info only by default, with Prometheus disabled by default.
+- Deployment guidance still requires private networking, firewalling, or deployment-specific auth for actuator endpoints outside local demos.
 
 ## Telemetry Posture
 
@@ -34,6 +43,8 @@ Revisit this disposition if cookie/session authentication, credentialed CORS, or
 - Cloud mutation is dry-run/no-op by default.
 - Live mutation requires explicit live mode, operator intent, account/region guardrails, capacity caps, and mutation-specific guardrails.
 - Cloud-sandbox defaults are constrained and use the documented `lbp-sandbox-` resource-name prefix.
+- Destructive deletion remains fail-closed unless live mode, deletion approval, ownership confirmation, live AWS clients, and ownership-tag validation all pass.
+- Placeholder AWS credentials are rejected, and missing prod/cloud-sandbox API keys fail closed for protected routes.
 - Default tests use mocked AWS clients and are not expected to create, modify, or delete AWS resources.
 
 ## Replay/Evaluation Posture
@@ -52,14 +63,16 @@ Revisit this disposition if cookie/session authentication, credentialed CORS, or
 ## Input/API Hardening Posture
 
 - API validation returns structured JSON error envelopes for malformed JSON, validation failures, oversized requests, and authentication/authorization failures.
+- Covered API/auth error paths do not expose configured API keys or bearer-token material.
 - Request-size filtering is covered by tests and is ordered behind authentication for protected mutation paths in hardened auth modes.
 - CSV/JSON import paths validate schema shape, reject dangerous or malformed input, and neutralize spreadsheet formula injection risk.
+- Future code should continue to avoid placing secrets in exception messages; this is a coding-discipline residual risk, not a current finding from the audited API paths.
 
 ## Static Analysis Posture
 
 - A separate CodeQL workflow provides Java/Kotlin static-analysis coverage with manual Maven build mode.
 - CodeQL is treated as a SAST baseline, not a complete security review, independent audit, or production-readiness claim.
-- Initial CodeQL findings should be reviewed and triaged before SAST is treated as a mature release blocker.
+- The disabled-CSRF finding has a documented accepted disposition for the current stateless JSON/no-cookie API design.
 - Findings involving CloudManager/AWS guardrails, auth, request validation, deserialization, file parsing, command execution, or telemetry redaction should receive priority review.
 
 ## Release Provenance Posture
