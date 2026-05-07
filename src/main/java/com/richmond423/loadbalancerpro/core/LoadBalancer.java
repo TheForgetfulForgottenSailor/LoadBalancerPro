@@ -15,13 +15,12 @@ public class LoadBalancer {
     private static final int EXECUTOR_SHUTDOWN_TIMEOUT_SEC = 5;
     private static final double DEFAULT_PREDICTIVE_LOAD_FACTOR = 1.1;
     private static final double DEFAULT_MAX_USAGE_THRESHOLD = 100.0;
-    private static final int CLOUD_RETRY_ATTEMPTS = 3;
-    private static final long CLOUD_RETRY_DELAY_MS = 1000;
     private static final int SHUTDOWN_RETRIES = 2;
 
     private final ServerRegistry serverRegistry = new ServerRegistry();
     private final LoadDistributionEngine loadDistributionEngine;
     private final ServerHealthCoordinator serverHealthCoordinator;
+    private final CloudMetricsCoordinator cloudMetricsCoordinator;
     private final List<String> alertLog = new CopyOnWriteArrayList<>();
     private final ConsistentHashRing consistentHashRing;
     private final ServerMonitor monitor;
@@ -69,6 +68,7 @@ public class LoadBalancer {
                 totalData -> leastLoaded(totalData),
                 this::getServersByType,
                 () -> cloudManager);
+        this.cloudMetricsCoordinator = new CloudMetricsCoordinator(() -> cloudManager, logger);
         this.monitor = new ServerMonitor(this, this.maxUsageThreshold, 1000, 10.0, null);
         this.laseShadowAdvisor = Objects.requireNonNull(laseShadowAdvisor, "laseShadowAdvisor cannot be null");
     }
@@ -316,29 +316,7 @@ public class LoadBalancer {
     }
 
     public void updateCloudMetricsIfAvailable() throws IOException {
-        if (cloudManager == null) {
-            logger.debug("CloudManager not initialized; skipping cloud metric update.");
-            return;
-        }
-        int attempts = CLOUD_RETRY_ATTEMPTS;
-        while (attempts > 0) {
-            try {
-                cloudManager.updateServerMetricsFromCloud();
-                return;
-            } catch (Exception e) {
-                attempts--;
-                logger.warn("Cloud metric update failed (attempts left: {}): {}", attempts, e.getMessage());
-                if (attempts == 0) {
-                    throw new IOException("Cloud metric update failed after retries", e);
-                }
-                try {
-                    Thread.sleep(CLOUD_RETRY_DELAY_MS);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw new IOException("Interrupted during retry delay", ie);
-                }
-            }
-        }
+        cloudMetricsCoordinator.updateCloudMetricsIfAvailable();
     }
 
     /**
