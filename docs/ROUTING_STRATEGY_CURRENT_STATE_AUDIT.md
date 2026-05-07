@@ -112,6 +112,12 @@ This surface chooses or recommends one server from telemetry candidates. It is e
 - LASE should remain described as shadow/research-grade unless a future change explicitly wires it into public allocation flows.
 - Legacy batch algorithms should not be described as request-level API strategies unless they are explicitly added to `RoutingStrategyRegistry` and covered by API tests.
 
+## OpenAPI/API Documentation Note
+
+SpringDoc/OpenAPI is currently generated from controller and DTO types. Strategy IDs, request/response examples, structured error cases, and read-only safety boundaries are curated in `README.md` and this audit rather than controller-level OpenAPI annotations.
+
+A future optional lane could add controller-level OpenAPI annotations and/or focused OpenAPI contract tests for `POST /api/routing/compare`. No behavior change is needed for this docs-only clarification.
+
 ## Existing Tests
 
 - `src/test/java/com/richmond423/loadbalancerpro/core/RoutingComparisonEngineTest.java`

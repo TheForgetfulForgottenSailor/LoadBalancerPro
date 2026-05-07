@@ -562,6 +562,15 @@ The allocation APIs are calculation-only. Scaling recommendations are simulation
 
 `POST /api/routing/compare` compares supported routing strategies against caller-provided candidate telemetry. Supported strategy IDs are `ROUND_ROBIN`, `TAIL_LATENCY_POWER_OF_TWO`, `WEIGHTED_LEAST_LOAD`, and `WEIGHTED_ROUND_ROBIN`. It is read-only and recommendation-only: it returns strategy results and explanations, does not call `CloudManager` or AWS, does not mutate cloud resources, does not mutate `LoadBalancer` allocation state, and does not alter the capacity-aware or predictive allocation endpoints.
 
+OpenAPI note: `POST /api/routing/compare` is available through the SpringDoc-generated OpenAPI output, but the current OpenAPI schema is inferred from controller and DTO types rather than curated controller annotations. Treat this README section as the curated source of truth for valid request-level strategy IDs, request and response examples, structured error cases, and safety boundaries:
+
+- `ROUND_ROBIN`
+- `TAIL_LATENCY_POWER_OF_TWO`
+- `WEIGHTED_LEAST_LOAD`
+- `WEIGHTED_ROUND_ROBIN`
+
+The comparison endpoint is read-only, recommendation-only, and shadow-style: it does not mutate AWS or `CloudManager` state, and it does not mutate legacy `LoadBalancer` allocation state. Request-level `WEIGHTED_ROUND_ROBIN` is separate from legacy batch `weightedDistribution(double)`; it chooses one healthy candidate for request-level comparison output, while legacy weighted distribution splits a batch load across servers.
+
 `WEIGHTED_LEAST_LOAD` evaluates all healthy candidates and normalizes in-flight request count, queue depth, latency, tail latency, and error rate by effective capacity, then applies optional server `weight`. Missing or zero routing weight defaults to `1.0`; very small positive weight is clamped safely during scoring; negative or non-finite weight is rejected.
 
 `WEIGHTED_ROUND_ROBIN` uses smooth weighted round-robin across healthy request-level candidates. It uses the same routing `weight` input semantics as the comparison endpoint: missing or zero weight defaults to `1.0`, very small positive weight is clamped safely, and negative or non-finite weight is rejected before strategy execution.
