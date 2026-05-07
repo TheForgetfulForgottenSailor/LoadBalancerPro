@@ -13,12 +13,14 @@ import static org.mockito.Mockito.*;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
 /**
  * Test class for the ServerMonitor, verifying its functionality in monitoring server metrics,
@@ -132,6 +134,29 @@ class ServerMonitorTest {
         logger.debug("Waited for {} monitor cycles.", cycles);
     }
 
+    private void waitUntil(BooleanSupplier condition, long timeoutMillis, String failureMessage)
+            throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (System.currentTimeMillis() < deadline) {
+            if (condition.getAsBoolean()) {
+                return;
+            }
+            Thread.sleep(25);
+        }
+        fail(failureMessage);
+    }
+
+    private void stopCurrentMonitor() throws InterruptedException {
+        if (monitor != null) {
+            monitor.stop();
+        }
+        if (monitorThread != null) {
+            monitorThread.interrupt();
+            monitorThread.join(5000);
+            assertFalse(monitorThread.isAlive(), "Monitor thread did not shut down properly.");
+        }
+    }
+
     @Test
     void asyncAlertSubmissionAfterStopIsIgnored() throws Exception {
         monitor.stop();
@@ -141,6 +166,116 @@ class ServerMonitorTest {
         sendAlertAsync.setAccessible(true);
 
         assertDoesNotThrow(() -> sendAlertAsync.invoke(monitor, "late alert after shutdown"));
+    }
+
+    @Test
+    void stopIsIdempotentAndMarksMonitorStopped() throws InterruptedException {
+        waitUntil(monitor::isRunning, 1000, "Monitor should enter running state after setup.");
+        assertTrue(monitor.isRunning(), "Monitor should be running after setup.");
+        assertTrue(monitor.isAlive(), "Deprecated isAlive shim should mirror running state.");
+
+        monitor.stop();
+        monitorThread.join(5000);
+
+        assertFalse(monitorThread.isAlive(), "Monitor thread should stop after stop().");
+        assertFalse(monitor.isRunning(), "Monitor running state should be false after stop().");
+        assertFalse(monitor.isAlive(), "Deprecated isAlive shim should report stopped state.");
+        assertFalse(monitor.getStatus().isRunning(), "Monitor status should report stopped state.");
+        assertDoesNotThrow(monitor::stop, "Repeated stop() should remain a safe no-op.");
+    }
+
+    @Test
+    void pauseAndResumeToggleStatusWithoutStoppingMonitor() throws InterruptedException {
+        waitUntil(monitor::isRunning, 1000, "Monitor should enter running state before pause/resume.");
+        assertTrue(monitor.getStatus().isRunning(), "Monitor should start in running state.");
+
+        monitor.pause();
+
+        assertTrue(monitor.getStatus().isPaused(), "pause() should mark the monitor paused.");
+        assertTrue(monitor.getStatus().isRunning(), "pause() should not stop the monitor.");
+
+        monitor.resume();
+
+        assertFalse(monitor.getStatus().isPaused(), "resume() should clear paused state.");
+        assertTrue(monitor.getStatus().isRunning(), "resume() should keep the monitor running.");
+    }
+
+    @Test
+    void interruptedMonitorMarksRunningStateStopped() throws InterruptedException {
+        addServers(new Server("INTERRUPT-CHECK", 20.0, 20.0, 20.0));
+
+        monitorThread.interrupt();
+        monitorThread.join(5000);
+
+        assertFalse(monitorThread.isAlive(), "Monitor thread should exit after interruption.");
+        assertFalse(monitor.isRunning(), "Monitor running state should be false after interruption.");
+        assertFalse(monitor.getStatus().isRunning(), "Monitor status should report stopped after interruption.");
+    }
+
+    @Test
+    void monitorCycleInvokesLoadBalancerHealthCheck() throws Exception {
+        stopCurrentMonitor();
+        LoadBalancer observedBalancer = spy(new LoadBalancer());
+        Server server = new Server("HEALTH-CYCLE", 20.0, 20.0, 20.0);
+        observedBalancer.addServer(server);
+        ServerMonitor observedMonitor = new ServerMonitor(new ServerMonitor.Config()
+            .withThreshold(80.0)
+            .withInterval(MONITOR_CYCLE_MS)
+            .withFluctuation(0.0)
+            .withAlertCooldownMs(0),
+            observedBalancer,
+            null);
+        Thread observedThread = new Thread(observedMonitor);
+
+        try {
+            observedThread.start();
+
+            verify(observedBalancer, timeout(2000).atLeastOnce()).checkServerHealth();
+            assertTrue(server.isHealthy(), "Normal health-cycle server should remain healthy.");
+        } finally {
+            observedMonitor.stop();
+            observedThread.interrupt();
+            observedThread.join(5000);
+            observedBalancer.shutdown();
+        }
+    }
+
+    @Test
+    void cloudMetricIOExceptionFallsBackWithoutLiveAwsClients() throws Exception {
+        stopCurrentMonitor();
+        LoadBalancer mockedBalancer = mock(LoadBalancer.class);
+        Server cloudServer = new Server("CLOUD-METRIC-FAILURE", 10.0, 20.0, 30.0, ServerType.CLOUD);
+        when(mockedBalancer.getServers()).thenReturn(List.of(cloudServer));
+        when(mockedBalancer.hasCloudManager()).thenReturn(true);
+        doThrow(new IOException("simulated cloud metric failure"))
+            .when(mockedBalancer).updateCloudMetricsIfAvailable();
+        ServerMonitor isolatedMonitor = new ServerMonitor(new ServerMonitor.Config()
+            .withThreshold(80.0)
+            .withInterval(MONITOR_CYCLE_MS)
+            .withFluctuation(0.0)
+            .withMaxCloudRetries(1)
+            .withCloudRetryBaseMs(1)
+            .withMaxConsecutiveCloudFailures(1)
+            .withAlertCooldownMs(0),
+            mockedBalancer,
+            null);
+        Thread isolatedThread = new Thread(isolatedMonitor);
+
+        try {
+            isolatedThread.start();
+            waitUntil(() -> isolatedMonitor.getStatus().getConsecutiveFailures() >= 1, 3000,
+                "Persistent cloud metric failure should record a monitor failure.");
+
+            assertTrue(isolatedMonitor.getStatus().getConsecutiveFailures() >= 1,
+                "Cloud metric IOException path should record a consecutive failure.");
+            verify(mockedBalancer, atLeastOnce()).updateCloudMetricsIfAvailable();
+            verify(mockedBalancer, atLeastOnce()).logAlert(contains("Persistent cloud metric fetch failure"));
+            verify(mockedBalancer, atLeastOnce()).checkServerHealth();
+        } finally {
+            isolatedMonitor.stop();
+            isolatedThread.interrupt();
+            isolatedThread.join(5000);
+        }
     }
 
     /**
