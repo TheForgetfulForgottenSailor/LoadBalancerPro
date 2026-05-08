@@ -2,9 +2,9 @@ name: CodeQL
 
 on:
   push:
-    branches: [loadbalancerpro-clean]
+    branches: [main]
   pull_request:
-    branches: [loadbalancerpro-clean]
+    branches: [main]
   schedule:
     - cron: "0 12 * * 1"
 
