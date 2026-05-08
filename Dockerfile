@@ -13,7 +13,7 @@ RUN mvn -q -DskipTests package spring-boot:repackage \
     && cp "$JAR" /workspace/app.jar
 
 # eclipse-temurin:17-jre-jammy
-FROM eclipse-temurin:17-jre-jammy@sha256:642d45bf22d3cb9face159181732ed9fa70873b2681e50445eff7d4785c176bb
+FROM eclipse-temurin:25-jre-jammy@sha256:0df1bb22182727e325476c0a9ab38ec4d2b042cbce0ea18a7da71284fea0c40c
 WORKDIR /app
 
 RUN apt-get update \
