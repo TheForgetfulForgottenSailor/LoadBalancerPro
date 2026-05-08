@@ -185,6 +185,63 @@ class ServerMonitorTest {
     }
 
     @Test
+    void stopBeforeStartIsSafeNoOpAndLeavesMonitorStopped() throws InterruptedException {
+        stopCurrentMonitor();
+        ServerMonitor neverStartedMonitor = new ServerMonitor(new ServerMonitor.Config()
+            .withThreshold(80.0)
+            .withInterval(MONITOR_CYCLE_MS)
+            .withFluctuation(10.0)
+            .withAlertCooldownMs(0),
+            balancer,
+            null);
+
+        assertFalse(neverStartedMonitor.isRunning(), "New monitor should start in stopped state.");
+        assertFalse(neverStartedMonitor.isAlive(), "Deprecated isAlive shim should mirror stopped state.");
+        assertFalse(neverStartedMonitor.getStatus().isRunning(), "Status should report stopped before start().");
+
+        assertDoesNotThrow(neverStartedMonitor::stop, "stop() before start() should be safe.");
+        assertDoesNotThrow(neverStartedMonitor::stop, "Repeated stop() before start() should remain safe.");
+
+        assertFalse(neverStartedMonitor.isRunning(), "Monitor should remain stopped after stop-before-start calls.");
+        assertFalse(neverStartedMonitor.isAlive(), "Deprecated isAlive shim should remain stopped.");
+        assertFalse(neverStartedMonitor.getStatus().isRunning(), "Status should remain stopped after stop-before-start.");
+    }
+
+    @Test
+    void publicStartAndRepeatedStopUpdateRunningState() throws InterruptedException {
+        stopCurrentMonitor();
+        ServerMonitor startedMonitor = new ServerMonitor(new ServerMonitor.Config()
+            .withThreshold(80.0)
+            .withInterval(MONITOR_CYCLE_MS)
+            .withFluctuation(10.0)
+            .withAlertCooldownMs(0),
+            balancer,
+            null);
+
+        try {
+            assertFalse(startedMonitor.isRunning(), "New monitor should start in stopped state.");
+
+            startedMonitor.start();
+
+            assertTrue(startedMonitor.isRunning(), "start() should mark the monitor running.");
+            assertTrue(startedMonitor.isAlive(), "Deprecated isAlive shim should mirror running state.");
+            assertTrue(startedMonitor.getStatus().isRunning(), "Status should report running after start().");
+
+            assertDoesNotThrow(startedMonitor::start, "Repeated start() while running should be safe.");
+            assertTrue(startedMonitor.isRunning(), "Repeated start() should leave the monitor running.");
+
+            startedMonitor.stop();
+
+            assertFalse(startedMonitor.isRunning(), "stop() should mark the monitor stopped.");
+            assertFalse(startedMonitor.isAlive(), "Deprecated isAlive shim should mirror stopped state.");
+            assertFalse(startedMonitor.getStatus().isRunning(), "Status should report stopped after stop().");
+            assertDoesNotThrow(startedMonitor::stop, "Repeated stop() after start() should remain safe.");
+        } finally {
+            startedMonitor.stop();
+        }
+    }
+
+    @Test
     void pauseAndResumeToggleStatusWithoutStoppingMonitor() throws InterruptedException {
         waitUntil(monitor::isRunning, 1000, "Monitor should enter running state before pause/resume.");
         assertTrue(monitor.getStatus().isRunning(), "Monitor should start in running state.");
