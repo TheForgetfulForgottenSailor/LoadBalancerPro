@@ -12,7 +12,7 @@
         <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <spring-boot.version>3.5.14</spring-boot.version>
+        <spring-boot.version>4.0.6</spring-boot.version>
         <netty.version>4.1.133.Final</netty.version>
         <aws-sdk-v2.version>2.44.1</aws-sdk-v2.version>
         <javafx.version>17.0.10</javafx.version>
