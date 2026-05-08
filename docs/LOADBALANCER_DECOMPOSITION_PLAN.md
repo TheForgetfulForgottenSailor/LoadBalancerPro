@@ -4,8 +4,8 @@
 
 - Version: v2.4.2
 - Baseline branch: loadbalancerpro-clean
-- Baseline HEAD: 4d6153be7395ef14cd8ffc7863686b06e96686f4
-- Purpose: document the current `LoadBalancer.java` responsibility map and a conservative, docs-first decomposition path after the routing strategy current-state audit
+- Baseline HEAD: ca603353c63ee4024b65ce9c7af4406889c02c7d or later
+- Purpose: document the current `LoadBalancer.java` responsibility map and a conservative, docs-first decomposition path after the CloudMetricsCoordinator extraction and PR #44 lifecycle characterization
 
 ## Current-State Summary
 
@@ -14,9 +14,13 @@
 - `ConsistentHashRing`
 - `ServerRegistry`
 - `LoadDistributionEngine`
+- `LoadDistributionPlanner`
 - `ServerHealthCoordinator`
+- `CloudMetricsCoordinator`
 
-At the current baseline, `LoadBalancer.java` is about 500 lines and mostly acts as a public facade/orchestrator. It still owns public constructors, public API compatibility, locking, cloud manager lifetime, monitor/executor lifetime, import/export orchestration, legacy batch routing entry points, LASE shadow observation wiring, and deprecated compatibility shims.
+At the current baseline, `LoadBalancer.java` mostly acts as a public facade/orchestrator. It still owns public constructors, public API compatibility, locking, cloud manager lifetime and scale boundaries, monitor/executor lifecycle, async import/export orchestration, legacy batch routing entry points, LASE shadow observation wiring, and deprecated compatibility shims.
+
+PR #44 added lifecycle characterization tests that pin shutdown preserving registered servers and public snapshots, plus synchronous distribution facade methods remaining callable after shutdown. Those tests avoid sleeps, reflection, and private executor assertions; future decomposition should preserve or intentionally update that public behavior.
 
 The request-level routing strategy registry/API is a separate layer. `RoutingStrategy`, `RoutingStrategyRegistry`, `RoutingComparisonEngine`, `RoutingController`, and `RoutingComparisonService` are not currently delegated through `LoadBalancer.java`. Do not merge those two routing layers during decomposition without a separate design.
 
@@ -33,7 +37,7 @@ The request-level routing strategy registry/API is a separate layer. `RoutingStr
 | Weighted distribution | `LoadBalancer.weightedDistribution`, `LoadDistributionEngine` | Legacy proportional batch distribution, not request-level weighted round robin. |
 | Consistent hashing batch behavior | `LoadBalancer.consistentHashing`, `ConsistentHashRing` | Ring helper is extracted, but the public batch loop and synthetic `data-N` key behavior remain in `LoadBalancer`. |
 | Cloud initialization | `LoadBalancer.initializeCloud`, `CloudManager` | Public cloud setup remains in `LoadBalancer`. Do not change dry-run or live guardrail behavior during decomposition. |
-| Cloud metrics update coordination | `LoadBalancer.updateCloudMetricsIfAvailable`, `updateMetricsFromCloud` | Retry constants, retry loop, and deprecated shim remain in `LoadBalancer`. |
+| Cloud metrics update coordination | `CloudMetricsCoordinator`, `LoadBalancer.updateMetricsFromCloud` | `CloudMetricsCoordinator` owns cloud metrics no-op/retry/interruption wrapper behavior. `LoadBalancer` remains the public facade and owns CloudManager lifetime and scale boundaries. |
 | Cloud scale and shutdown boundary | `LoadBalancer.scaleCloudServers`, `cloudManagerOptionalShutdown` | Thin public boundary over `CloudManager`; still safety-sensitive. |
 | Monitor/executor lifecycle | `LoadBalancer.monitor`, `executor`, `shutdown` | Lifecycle remains in `LoadBalancer`, including repeated shutdown behavior. |
 | Import/export orchestration | `importServerLogs`, `exportReport`, `alertLog` | Public facade over `Utils`, executor, registry snapshot, and alert log. |
@@ -48,8 +52,9 @@ The request-level routing strategy registry/API is a separate layer. `RoutingStr
 | `ConsistentHashRing` | Extracted | Package-private helper for ring maintenance and healthy server selection. |
 | `ServerRegistry` | Extracted | Package-private helper for server list/map snapshots and typed/healthy views. It still contains `loadQueue`, which remains an audit item only. |
 | `LoadDistributionEngine` | Extracted | Package-private helper for legacy batch allocation, accumulated load, and metrics recording. |
-| `LoadDistributionPlanner` | Existing helper | Static planner for legacy batch allocation formulas. |
+| `LoadDistributionPlanner` | Extracted helper | Static planner for legacy batch allocation formulas. |
 | `ServerHealthCoordinator` | Extracted | Package-private helper for health detection, removal, redistribution, and cloud replacement scaling coordination. |
+| `CloudMetricsCoordinator` | Extracted | Package-private helper for cloud metrics no-op/retry/interruption wrapper behavior without changing dry-run/no-op guardrails. |
 
 ## Proposed Extraction Targets
 
@@ -58,7 +63,7 @@ The request-level routing strategy registry/API is a separate layer. `RoutingStr
 | `ServerRegistry` or `ServerPool` | `ServerRegistry` already exists | Keep registry focused on storage/snapshots. Consider a broader `ServerPool` only if lock ownership or public snapshot ownership is deliberately moved later. | Do not start here unless new tests show registry ownership is still too coupled. |
 | `ServerHealthCoordinator` | Already exists | Keep as health/failover coordinator. Future work could reduce callback coupling only with tests around cloud failover and redistribution. | Do not re-extract now. |
 | `LegacyBatchDistributionEngine` | Partially covered by `LoadDistributionEngine` and `LoadDistributionPlanner` | If needed later, move `consistentHashing`, healthy-server wrappers, and rebalance strategy selection behind one package-private coordinator while preserving public `LoadBalancer` methods. | Medium risk; defer until cloud/LASE/lifecycle edges are clearer. |
-| `CloudMetricsCoordinator` | Not extracted | Isolate `cloudManager`, `initializeCloud`, `updateCloudMetricsIfAvailable`, retry constants, `scaleCloudServers`, and cloud shutdown boundary behind a package-private coordinator. | Best first implementation candidate, but add or refresh characterization around retries and no-cloud no-op first. |
+| `CloudMetricsCoordinator` | Extracted | Preserve existing cloud metrics no-op/retry/interruption wrapper behavior. `LoadBalancer` still owns CloudManager lifetime and scale boundaries. | No extraction follow-up needed unless future CloudManager boundary work moves this behavior. |
 | `RoutingStrategyBridge` or `RequestRoutingCoordinator` | Request-level routing already lives outside `LoadBalancer` | Would bridge legacy batch allocation and request-level strategy comparison only if a future design explicitly requires it. | Defer. This is not a decomposition-only change. |
 | `LaseShadowAdvisorBridge` | Not extracted | Isolate LASE constructors, `laseShadowAdvisor`, test hooks, and `observeLaseShadow` fail-safe behavior. | Good later candidate after preserving shadow-only behavior with focused tests. |
 | `CompatibilityShimPolicy` | Not code-extracted | Document and test deprecated shim behavior. Do not remove shims during decomposition. | Docs/test policy first; no production removal. |
@@ -67,13 +72,13 @@ The request-level routing strategy registry/API is a separate layer. `RoutingStr
 ## Safe Migration Sequence
 
 1. Keep docs and evidence current before each implementation branch.
-2. Add or refresh characterization tests for the next specific responsibility before production refactor.
+2. Add or refresh characterization tests for the next specific responsibility before production refactor, especially where lifecycle/thread behavior is involved.
 3. Extract one responsibility at a time.
 4. Keep `LoadBalancer.java` public method signatures, constructor behavior, and deprecated shims intact.
 5. Preserve package-private helper boundaries unless a public API change is explicitly approved.
 6. Keep legacy batch routing separate from request-level `RoutingStrategyRegistry` and `/api/routing/compare`.
 7. Run full verification after each extraction: `mvn -q test`, `mvn -q -DskipTests package`, packaged JAR smoke checks where relevant, `git diff --check`.
-8. Do not remove deprecated shims until a documented removal policy exists and downstream compatibility risk is accepted.
+8. Do not remove deprecated shims until caller usage is audited, migration is complete, and downstream compatibility risk is accepted.
 
 ## Non-Goals
 
@@ -96,34 +101,33 @@ The request-level routing strategy registry/API is a separate layer. `RoutingStr
 | Cloud guardrail regression | Cloud initialization, metrics, scaling, and shutdown touch safety-sensitive paths. | Use mocked/dry-run tests only; no live AWS behavior; keep CloudManager semantics unchanged. |
 | Routing terminology confusion | Legacy batch distribution and request-level routing strategy comparison share names like round robin and weighted. | Keep docs explicit and avoid bridging layers without design approval. |
 | LASE overreach | LASE is shadow-only in public allocation flows today. | Keep LASE bridge shadow-only and fail-safe; do not mutate routing or cloud behavior. |
-| Lifecycle race/regression | `shutdown`, monitor ownership, executor ownership, and async import can change timing. | Defer lifecycle extraction until dedicated tests cover idempotency and async behavior. |
+| Lifecycle race/regression | `shutdown`, monitor ownership, executor ownership, and async import can change timing. | PR #44 pins shutdown snapshots and synchronous facade behavior; continue tests-only characterization before moving monitor/executor or async import/export behavior. |
 | `LoadBalancer.java` growth | Adding new strategies or bridges directly to the facade can reverse prior decomposition work. | Add new behavior behind focused helpers and keep `LoadBalancer` as the compatibility facade. |
 
-## Recommended First Implementation Branch
+## Recommended Next Steps
 
-Recommended first implementation branch after this docs refresh:
+No source extraction is recommended from this docs-only refresh.
 
-`codex/extract-cloud-metrics-coordinator`
+Recommended next work:
 
-Rationale:
+- Continue tests-only characterization before source extraction where lifecycle/thread behavior is involved.
+- Do not remove deprecated shims until caller usage is audited and migration is complete.
+- Keep source extraction narrow and separately reviewed.
+- Preserve current cloud/live AWS behavior and dry-run/no-op guardrails unless a dedicated cloud boundary change is reviewed.
 
-- `ServerRegistry`, `ConsistentHashRing`, `LoadDistributionEngine`, and `ServerHealthCoordinator` are already extracted.
-- Cloud metrics/update coordination is still visibly concentrated in `LoadBalancer.java` through retry constants, cloud manager setup, metric update retries, scale boundary, and shutdown boundary.
-- A package-private coordinator can keep the public `LoadBalancer` API unchanged while reducing cloud-facing responsibility in the facade.
-- The branch should include focused characterization for no-cloud no-op behavior, retry failure behavior, deprecated `updateMetricsFromCloud()` compatibility, and scale input validation before or alongside extraction.
-
-Do not choose `codex/extract-server-registry` as the next branch unless a later audit identifies a new, specific registry responsibility. The registry helper already exists.
+Rationale: `CloudMetricsCoordinator` has already been extracted. The remaining risk is mostly public facade and lifecycle behavior, so the next move should be characterization-first rather than another source move.
 
 ## Additional Characterization Needed Before Future Extraction
 
-- cloud metrics retry behavior without live AWS calls
-- deprecated `updateMetricsFromCloud()` compatibility over the cloud metrics coordinator
-- `scaleCloudServers()` input validation and no-cloud behavior
+- monitor startup/stop behavior without sleeps or timing assumptions
+- async import/export behavior around shutdown
 - LASE shadow observation and fail-safe behavior without live routing changes
-- monitor shutdown idempotency and repeated shutdown behavior
-- async import behavior and executor ownership
 - export snapshot behavior with alerts and registry state
 - public API snapshot and lookup behavior if registry coordination changes
+- deprecated `getServerMonitor()` compatibility and caller usage
+- deprecated `updateMetricsFromCloud()` compatibility and caller usage
+- CloudManager lifetime and scale boundary behavior if that boundary moves
+- preservation of `CloudMetricsCoordinator` retry/no-op/interruption behavior if cloud metrics code changes
 - consistent hashing synthetic-key behavior if moved out of `LoadBalancer`
 
 ## Do Not Do Yet
