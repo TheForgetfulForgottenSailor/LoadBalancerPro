@@ -556,8 +556,9 @@ class ServerMonitorTest {
         monitor = new ServerMonitor(balancer);
         monitorThread = new Thread(monitor);
         monitorThread.start();
-        Thread.sleep(1000); // Allow thread to start
+        waitUntil(monitor::isRunning, 1000, "Restarted monitor should enter running state.");
         assertTrue(monitorThread.isAlive(), "Monitor thread should restart successfully.");
+        assertTrue(monitor.getStatus().isRunning(), "Restarted monitor status should report running.");
         logger.info("Shutdown and restart test passed: Monitor stopped and restarted successfully.");
         verify(logger).info("Shutdown and restart test passed: Monitor stopped and restarted successfully.");
     }
@@ -800,7 +801,7 @@ class ServerMonitorTest {
      *
      * Adds a server, interrupts the monitor thread, and verifies it stops gracefully.
      *
-     * @throws InterruptedException if the sleep operation is interrupted
+     * @throws InterruptedException if the thread join operation is interrupted
      */
     @Test
     @Timeout(value = 30)
@@ -810,9 +811,11 @@ class ServerMonitorTest {
         addServers(server);
 
         monitorThread.interrupt();
-        TimeUnit.SECONDS.sleep(1);
+        monitorThread.join(5000);
 
         assertFalse(monitorThread.isAlive(), "Monitor should stop after interruption.");
+        assertFalse(monitor.isRunning(), "Monitor running state should be false after interruption.");
+        assertFalse(monitor.getStatus().isRunning(), "Monitor status should report stopped after interruption.");
         logger.info("Interrupted monitor test passed: Thread stopped successfully.");
         verify(logger).info("Interrupted monitor test passed: Thread stopped successfully.");
     }
