@@ -13,8 +13,8 @@ Date: 2026-05-04
   - `LoadBalancerPro-1.9.0-bom.xml`
   - `LoadBalancerPro-1.9.0-SHA256SUMS.txt`
 - The Release Artifacts workflow created two GitHub artifact attestations:
-  - `https://github.com/richmond423/LoadBalancerPro/attestations/26304650`
-  - `https://github.com/richmond423/LoadBalancerPro/attestations/26304653`
+  - `https://github.com/TheForgetfulForgottenSailor/LoadBalancerPro/attestations/26304650`
+  - `https://github.com/TheForgetfulForgottenSailor/LoadBalancerPro/attestations/26304653`
 - Existing tags remain immutable.
 - Public `main` remains untouched.
 
@@ -60,8 +60,8 @@ Recommended contents:
   - supports downloaded artifact integrity verification against the checksum file,
   - does not prove builder identity or dependency safety.
 - Attestation links:
-  - `https://github.com/richmond423/LoadBalancerPro/attestations/26304650`
-  - `https://github.com/richmond423/LoadBalancerPro/attestations/26304653`
+  - `https://github.com/TheForgetfulForgottenSailor/LoadBalancerPro/attestations/26304650`
+  - `https://github.com/TheForgetfulForgottenSailor/LoadBalancerPro/attestations/26304653`
 - What attestations prove:
   - GitHub artifact attestations provide build provenance evidence,
   - the JAR provenance attestation helps verify where and how the release JAR was built,
@@ -84,7 +84,7 @@ Recommended contents:
 - Optional GitHub CLI verification command:
 
   ```sh
-  gh attestation verify LoadBalancerPro-1.9.0.jar --repo richmond423/LoadBalancerPro
+  gh attestation verify LoadBalancerPro-1.9.0.jar --repo TheForgetfulForgottenSailor/LoadBalancerPro
   ```
 
 - Note that GitHub CLI verification requires a downloaded artifact and compatible GitHub authentication/environment.

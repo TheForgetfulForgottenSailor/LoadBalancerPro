@@ -18,7 +18,7 @@ jobs:
     name: Analyze Java
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.repository == 'richmond423/LoadBalancerPro'
+    if: github.repository == 'TheForgetfulForgottenSailor/LoadBalancerPro'
 
     strategy:
       fail-fast: false

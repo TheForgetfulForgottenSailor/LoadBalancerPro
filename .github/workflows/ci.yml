@@ -239,7 +239,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.repository == 'richmond423/LoadBalancerPro'
+    if: github.event_name == 'pull_request' && github.repository == 'TheForgetfulForgottenSailor/LoadBalancerPro'
     permissions:
       contents: read
       pull-requests: read
