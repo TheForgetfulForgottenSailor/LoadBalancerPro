@@ -1,12 +1,12 @@
-* @richmond423
+* @TheForgetfulForgottenSailor
 
-/src/main/java/com/richmond423/loadbalancerpro/core/CloudManager.java @richmond423
-/src/main/java/com/richmond423/loadbalancerpro/api/ @richmond423
-/src/main/java/com/richmond423/loadbalancerpro/core/RoutingStrategy*.java @richmond423
-/src/main/java/com/richmond423/loadbalancerpro/core/*Routing*.java @richmond423
-/src/main/java/com/richmond423/loadbalancerpro/core/*Strategy.java @richmond423
-/Dockerfile @richmond423
-/.github/workflows/ @richmond423
-/pom.xml @richmond423
-/evidence/ @richmond423
-/docs/ @richmond423
+/src/main/java/com/richmond423/loadbalancerpro/core/CloudManager.java @TheForgetfulForgottenSailor
+/src/main/java/com/richmond423/loadbalancerpro/api/ @TheForgetfulForgottenSailor
+/src/main/java/com/richmond423/loadbalancerpro/core/RoutingStrategy*.java @TheForgetfulForgottenSailor
+/src/main/java/com/richmond423/loadbalancerpro/core/*Routing*.java @TheForgetfulForgottenSailor
+/src/main/java/com/richmond423/loadbalancerpro/core/*Strategy.java @TheForgetfulForgottenSailor
+/Dockerfile @TheForgetfulForgottenSailor
+/.github/workflows/ @TheForgetfulForgottenSailor
+/pom.xml @TheForgetfulForgottenSailor
+/evidence/ @TheForgetfulForgottenSailor
+/docs/ @TheForgetfulForgottenSailor

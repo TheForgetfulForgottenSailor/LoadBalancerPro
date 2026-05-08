@@ -23,7 +23,7 @@ The API and CLI are safe by default: allocation endpoints do not call AWS, CLI c
 
 ## Current Release Evidence
 
-- [GitHub Release v2.4.2](https://github.com/richmond423/LoadBalancerPro/releases/tag/v2.4.2) is the dependency-maintenance release for `org.json:json` and AWS SDK v2 BOM updates.
+- [GitHub Release v2.4.2](https://github.com/TheForgetfulForgottenSailor/LoadBalancerPro/releases/tag/v2.4.2) is the dependency-maintenance release for `org.json:json` and AWS SDK v2 BOM updates.
 - [`docs/V2_4_2_DEPENDENCY_MAINTENANCE_RELEASE.md`](docs/V2_4_2_DEPENDENCY_MAINTENANCE_RELEASE.md) summarizes the v2.4.2 dependency scope and safety posture.
 - [`docs/V2_4_0_RELEASE_ARTIFACT_EVIDENCE.md`](docs/V2_4_0_RELEASE_ARTIFACT_EVIDENCE.md) records the v2.4.0 release artifact, checksum, SBOM, and attestation evidence.
 - [`docs/V2_4_0_DOCKER_RUNTIME_EVIDENCE.md`](docs/V2_4_0_DOCKER_RUNTIME_EVIDENCE.md) records Docker build/runtime verification after the v2.4.0 namespace migration.

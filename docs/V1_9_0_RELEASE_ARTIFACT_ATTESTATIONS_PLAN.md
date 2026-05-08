@@ -128,7 +128,7 @@ After implementation:
 - If GitHub CLI is available, verify a downloaded artifact with:
 
   ```sh
-  gh attestation verify LoadBalancerPro-1.9.0.jar --repo richmond423/LoadBalancerPro
+  gh attestation verify LoadBalancerPro-1.9.0.jar --repo TheForgetfulForgottenSailor/LoadBalancerPro
   ```
 
 - If GitHub CLI is unavailable, document browser-based verification only.

@@ -65,8 +65,8 @@ The checksum file does not prove builder identity, does not prove dependencies a
 
 GitHub artifact attestations were created for the `v1.9.0` release artifacts:
 
-- `https://github.com/richmond423/LoadBalancerPro/attestations/26304650`
-- `https://github.com/richmond423/LoadBalancerPro/attestations/26304653`
+- `https://github.com/TheForgetfulForgottenSailor/LoadBalancerPro/attestations/26304650`
+- `https://github.com/TheForgetfulForgottenSailor/LoadBalancerPro/attestations/26304653`
 
 GitHub artifact attestations provide build provenance evidence. One attestation covers release JAR provenance. One attestation covers the JAR/SBOM JSON relationship.
 
@@ -93,7 +93,7 @@ Trivy, GitHub dependency review, CodeQL, SBOM inventory, checksums, and attestat
 
 To review the `v1.9.0` release artifact evidence in the browser:
 
-1. Open the public GitHub repository: `https://github.com/richmond423/LoadBalancerPro`.
+1. Open the public GitHub repository: `https://github.com/TheForgetfulForgottenSailor/LoadBalancerPro`.
 2. Go to `Actions`.
 3. Open the `Release Artifacts` workflow.
 4. Open the `v1.9.0` workflow run.
@@ -105,15 +105,15 @@ To review the `v1.9.0` release artifact evidence in the browser:
    - `LoadBalancerPro-1.9.0-bom.xml`
    - `LoadBalancerPro-1.9.0-SHA256SUMS.txt`
 8. Open the attestation links:
-   - `https://github.com/richmond423/LoadBalancerPro/attestations/26304650`
-   - `https://github.com/richmond423/LoadBalancerPro/attestations/26304653`
+   - `https://github.com/TheForgetfulForgottenSailor/LoadBalancerPro/attestations/26304650`
+   - `https://github.com/TheForgetfulForgottenSailor/LoadBalancerPro/attestations/26304653`
 
 ## Optional GitHub CLI Verification
 
 If GitHub CLI is available and the release JAR has been downloaded locally, verify the artifact attestation with:
 
 ```sh
-gh attestation verify LoadBalancerPro-1.9.0.jar --repo richmond423/LoadBalancerPro
+gh attestation verify LoadBalancerPro-1.9.0.jar --repo TheForgetfulForgottenSailor/LoadBalancerPro
 ```
 
 This command requires GitHub CLI, a compatible GitHub authentication/environment, and the artifact file on the local filesystem.
