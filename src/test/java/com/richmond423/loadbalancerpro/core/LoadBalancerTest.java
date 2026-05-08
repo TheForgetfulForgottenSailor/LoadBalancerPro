@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BiFunction;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -1334,6 +1335,45 @@ class LoadBalancerTest {
         assertTrue(content.contains("S1"), "Server S1 missing in report!");
         assertTrue(content.contains("Test Alert"), "Alert missing in report!");
         logger.info("JSON export test passed: Report contains server and alert data.");
+    }
+
+    @Test
+    void shutdownRejectsAsyncImportSubmissionAndPreservesRegisteredServers() throws IOException {
+        logger.info("=== TESTING POST-SHUTDOWN ASYNC IMPORT REJECTION ===");
+        Server existing = new Server("ASYNC-LIFE-EXISTING", 30.0, 40.0, 50.0);
+        addServers(existing);
+        Path csvFile = createTestFile("post-shutdown-import.csv",
+            "ASYNC-LIFE-NEW,10.0,20.0,30.0\n");
+
+        balancer.shutdown();
+
+        assertThrows(RejectedExecutionException.class,
+            () -> balancer.importServerLogs(csvFile.toString(), "csv"),
+            "Async import should reject submission after shutdown terminates its executor!");
+        assertEquals(1, balancer.getServers().size(),
+            "Rejected post-shutdown import should not mutate registered server state!");
+        assertSame(existing, balancer.getServer("ASYNC-LIFE-EXISTING"),
+            "Existing server should remain registered after rejected import!");
+        assertFalse(balancer.getServerMap().containsKey("ASYNC-LIFE-NEW"),
+            "Rejected post-shutdown import should not add the new CSV server!");
+    }
+
+    @Test
+    void shutdownKeepsExportReportCallableWithServerAndAlertSnapshots() throws IOException {
+        logger.info("=== TESTING POST-SHUTDOWN EXPORT SNAPSHOT ===");
+        addServers(new Server("EXPORT-LIFE-S1", 30.0, 40.0, 50.0));
+        balancer.logAlert("Post-shutdown export alert");
+        Path jsonFile = TEST_DIR.resolve("post-shutdown-export.json");
+
+        balancer.shutdown();
+
+        assertDoesNotThrow(() -> balancer.exportReport(jsonFile.toString(), "json"),
+            "Export report should remain callable after shutdown!");
+        assertTrue(Files.exists(jsonFile), "Post-shutdown JSON report should be written!");
+        String content = Files.readString(jsonFile);
+        assertTrue(content.contains("EXPORT-LIFE-S1"), "Post-shutdown report should include server snapshot!");
+        assertTrue(content.contains("Post-shutdown export alert"),
+            "Post-shutdown report should include alert snapshot!");
     }
 
     /**
