@@ -15,7 +15,7 @@
         <spring-boot.version>3.5.14</spring-boot.version>
         <netty.version>4.1.133.Final</netty.version>
         <aws-sdk-v2.version>2.44.1</aws-sdk-v2.version>
-        <javafx.version>17.0.10</javafx.version>
+        <javafx.version>26.0.1</javafx.version>
     </properties>
 
     <!-- Let Spring Boot manage dependency versions -->
