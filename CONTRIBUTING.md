@@ -4,9 +4,9 @@ Thanks for helping improve LoadBalancerPro. This repository is managed as an ent
 
 ## Branch Workflow
 
-- Branch from `loadbalancerpro-clean`.
+- Branch from `main`.
 - Use planning branches for planned work before implementation when a task calls for planning.
-- Keep public `main` untouched unless the repository policy changes later.
+- Open pull requests into protected `main`; do not push directly to it.
 - Keep feature, release, and docs/config work in focused branches.
 
 ## Tests Before PR
